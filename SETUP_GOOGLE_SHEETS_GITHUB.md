@@ -25,15 +25,14 @@ Hướng dẫn này sẽ giúp bạn setup Google Sheets để lưu trữ dữ l
 2. **Sheet 2**: Click **"+"** → **"Sheet"** → Đặt tên **"WrongAnswers"**
 
 ### 1.3. Import dữ liệu mẫu (Tùy chọn)
-1. **Sheet "Submissions"**: 
-   - File → Import → Upload → Chọn `GOOGLE_SHEET_TEMPLATE.csv`
-   - Chọn "Replace data at selected cell"
-   - Click "Import data"
+1. **Mở file mẫu**: 
+   - Tải file `GOOGLE_SHEET_TEMPLATE.xlsx` từ GitHub
+   - Mở file này trong Excel hoặc Google Sheets
 
-2. **Sheet "WrongAnswers"**:
-   - File → Import → Upload → Chọn `WRONG_ANSWERS_TEMPLATE.csv`
-   - Chọn "Replace data at selected cell"
-   - Click "Import data"
+2. **Copy dữ liệu mẫu**:
+   - **Sheet "Submissions"**: Copy toàn bộ dữ liệu (bao gồm header)
+   - **Sheet "WrongAnswers"**: Copy toàn bộ dữ liệu (bao gồm header)
+   - Paste vào Google Sheet tương ứng
 
 ---
 
