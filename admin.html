@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Quản trị - Hệ thống ôn luyện trắc nghiệm Chi nhánh Cần Thơ II</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="mobile-enhancements.css">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <meta name="theme-color" content="#800020">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Admin Quiz">
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <style>
+    body { background: #f8f6f8; font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; color: #400000;}    
+    .container { max-width: 1200px; margin: 32px auto; background: #fff; box-shadow: 0 6px 20px rgba(128,0,32,0.08); border-radius: 14px; padding: 4px 22px 24px; border-top: 8px solid #800020;}
+    h1 { text-align: center; color: #800020; margin: 0; font-size: 1.8rem;}
+    .content { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 20px; }
+    .content h2 { color: #800020; font-size: 1.1rem; margin: 0 0 12px 0; }
+    .mt-4 { margin-top: 24px; }
+    .mt-3 { margin-top: 16px; }
+    .ml-2 { margin-left: 8px; }
+    .topic-form, .topic-list, .exam-list, .admin-actions { padding: 14px 14px 16px; border: 1px solid #eee; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    .topic-form input, .topic-form select {
+      padding: 7px;
+      font-size: 1rem;
+      margin-right: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      margin-bottom: 10px;
+    }
+    .topic-form .btn-save {
+      background: #800020;
+      color: #fff;
+      padding: 8px 22px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1.09rem;
+      transition: background 0.2s;
+    }
+    .topic-form .btn-save:hover, .topic-form .btn-save:focus { background: #c72c41;}
+    .success { color: #4caf50; font-weight: 500; }
+    .error { color: #f44336; font-weight: 500; }
+    .topic-list .item { padding: 7px 0; border-bottom: 1px solid #eee;}
+    .topic-item { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #eee; border-radius: 8px; background: #fafafa; margin-bottom: 10px; }
+    .topic-info h3 { margin: 0 0 4px; font-size: 1rem; color: #400000; }
+    .topic-meta { color: #6b6b6b; font-size: 0.9rem; }
+    .logo { display:flex; align-items:center; gap:12px; }
+    .logo img { height: 72px; width: auto; max-width: 100%; object-fit: contain; }
+    .logo-text p { margin: 0; font-size: 1.1rem; }
+    @media (max-width: 480px) { .logo img { height: 44px; } }
+    .del-btn {
+      background: #c72c41;
+      color: #fff;
+      border: none;
+      padding: 4px 11px;
+      border-radius: 5px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      margin-left: 12px;
+    }
+    .del-btn:hover, .del-btn:focus { background: #800020;}
+    .hidden { display: none; }
+    .file-upload input[type="file"] { border: none; background: #f7e5ed; color: #800020; padding: 6px; border-radius: 5px; font-size: 1rem;}
+    .back-link { color: #800020; font-weight: bold; text-decoration: underline; cursor:pointer; display:block; margin-bottom:12px;}
+    .admin-actions { display: flex; align-items:center; gap:10px; flex-wrap: wrap; justify-content:center; }
+    header { display:flex; align-items:center; justify-content: space-between; gap:12px; margin-bottom: 0; }
+    .header-back { display:inline-flex; align-items:center; gap:6px; margin:0; }
+    .btn { display:inline-flex; align-items:center; gap:6px; padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+    .btn-outline { border:1px solid #800020; color:#800020; background:#fff; }
+    .btn-outline:hover { background:#f7e5ed; }
+    .btn-delete { background:#c72c41; color:#fff; border: none; }
+    .btn-delete:hover { background:#800020; }
+    /* Modal styles */
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal.hidden { display: none; }
+    .modal .modal-content { background: #fff; width: min(720px, 92vw); max-height: 90vh; overflow-y: auto; border-radius: 10px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+    .modal .modal-actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top: 10px; }
+    
+    /* 2-column layout on wide screens */
+    @media (min-width: 960px) {
+      .content { grid-template-columns: 1fr 1fr; align-items: start; }
+      .content > .topic-form:nth-child(1) { grid-column: 1; grid-row: 1; }
+      .content > .topic-list { grid-column: 1; grid-row: 2; }
+      .content > .topic-form:nth-child(4) { grid-column: 2; grid-row: 1; }
+      .content > .exam-list { grid-column: 2; grid-row: 2; }
+      .admin-actions { grid-column: 1 / span 2; grid-row: 3; }
+    }
+    
+    @media (max-width: 960px) { 
+      .container { padding: 12px 10px 16px; max-width: 100%; } 
+      .topic-info h3 { font-size: 0.98rem; } 
+    }
+    
+    /* Mobile-specific admin enhancements */
+    @media (max-width: 768px) {
+      .container {
+        margin: 0 !important;
+        padding: 16px !important;
+        border-radius: 0 !important;
+        max-width: 100% !important;
+        box-shadow: none !important;
+      }
+      
+      .content {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 24px !important;
+      }
+      
+      .topic-form,
+      .topic-list,
+      .exam-list,
+      .admin-actions {
+        padding: 20px !important;
+        border-radius: 16px !important;
+        margin-bottom: 0 !important;
+      }
+      
+      .topic-form input,
+      .topic-form select {
+        min-height: 48px !important;
+        font-size: 16px !important;
+        padding: 12px 16px !important;
+        border-radius: 12px !important;
+        width: 100% !important;
+        margin-right: 0 !important;
+        margin-bottom: 16px !important;
+      }
+      
+      .topic-form .btn-save {
+        width: 100% !important;
+        min-height: 48px !important;
+        font-size: 16px !important;
+        padding: 14px 24px !important;
+        border-radius: 12px !important;
+        margin-bottom: 16px !important;
+      }
+      
+      .topic-item {
+        padding: 16px !important;
+        border-radius: 12px !important;
+        margin-bottom: 16px !important;
+      }
+      
+      .topic-info h3 {
+        font-size: 1.1rem !important;
+        margin-bottom: 8px !important;
+      }
+      
+      .topic-meta {
+        font-size: 14px !important;
+        margin-bottom: 12px !important;
+      }
+      
+      .del-btn {
+        padding: 8px 16px !important;
+        font-size: 14px !important;
+        border-radius: 8px !important;
+        margin-left: 8px !important;
+      }
+      
+      .admin-actions {
+        flex-direction: column !important;
+        gap: 12px !important;
+        padding: 20px !important;
+      }
+      
+      .admin-actions .btn {
+        width: 100% !important;
+        min-height: 48px !important;
+        font-size: 16px !important;
+        padding: 14px 24px !important;
+        justify-content: center !important;
+      }
+      
+      header {
+        flex-direction: column !important;
+        gap: 16px !important;
+        text-align: center !important;
+        margin-bottom: 24px !important;
+      }
+      
+      .logo {
+        justify-content: center !important;
+      }
+      
+      .logo img {
+        height: 60px !important;
+      }
+      
+      h1 {
+        font-size: 1.5rem !important;
+        margin-bottom: 8px !important;
+      }
+      
+      .logo-text p {
+        font-size: 1rem !important;
+        margin: 0 !important;
+      }
+      
+      .file-upload input[type="file"] {
+        width: 100% !important;
+        padding: 12px !important;
+        border-radius: 12px !important;
+        font-size: 16px !important;
+        margin-bottom: 16px !important;
+      }
+      
+      .form-group {
+        margin-bottom: 20px !important;
+      }
+      
+      .form-group label {
+        font-size: 16px !important;
+        font-weight: 600 !important;
+        margin-bottom: 8px !important;
+        display: block !important;
+      }
+      
+      .back-link {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        padding: 12px 16px !important;
+        border-radius: 12px !important;
+        margin-bottom: 16px !important;
+        font-size: 16px !important;
+      }
+      
+      .btn {
+        min-height: 48px !important;
+        font-size: 16px !important;
+        padding: 12px 20px !important;
+        border-radius: 12px !important;
+        justify-content: center !important;
+      }
+      
+      .btn-outline {
+        border-width: 2px !important;
+      }
+      
+      .btn-delete {
+        padding: 12px 20px !important;
+        font-size: 16px !important;
+        border-radius: 12px !important;
+      }
+      
+      .modal .modal-content {
+        width: 95vw !important;
+        max-width: 500px !important;
+        margin: 20px !important;
+        padding: 24px !important;
+        border-radius: 16px !important;
+      }
+      
+      .modal .modal-actions {
+        flex-direction: column !important;
+        gap: 12px !important;
+        margin-top: 24px !important;
+      }
+      
+      .modal .modal-actions .btn {
+        width: 100% !important;
+      }
+      
+      .success,
+      .error {
+        padding: 12px 16px !important;
+        border-radius: 12px !important;
+        font-size: 16px !important;
+        margin-bottom: 16px !important;
+      }
+      
+      /* Topic selector mobile layout */
+      .topic-selector,
+      .exam-selector {
+        width: 100% !important;
+        min-height: 48px !important;
+        font-size: 16px !important;
+        padding: 12px 16px !important;
+        border-radius: 12px !important;
+        margin-bottom: 16px !important;
+      }
+      
+      /* Grid view mobile adjustments */
+      #topic-list-container,
+      #exam-list-container {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px !important;
+      }
+      
+      .topic-item {
+        width: 100% !important;
+      }
+      
+      /* View toggle buttons mobile */
+      #topic-view-toggle,
+      #exam-view-toggle,
+      #add-topic-btn {
+        width: 100% !important;
+        min-height: 48px !important;
+        font-size: 16px !important;
+        padding: 12px 20px !important;
+        margin-bottom: 16px !important;
+        justify-content: center !important;
+      }
+      
+      /* Exam builder mobile */
+      #exam-topic-percents {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px !important;
+      }
+      
+      .topic-item {
+        padding: 16px !important;
+        border-radius: 12px !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="login-container" class="container">
+    <div class="login-form">
+      <div class="logo">
+        <img src="logo.png" alt="Logo" id="logo-img" style="height: 60px;">
+        <h2>Đăng nhập quản trị</h2>
+      </div>
+      <form id="login-form">
+        <div class="form-group">
+          <label for="username">Tên đăng nhập</label>
+          <input type="text" id="username" required>
+        </div>
+        <div class="form-group">
+          <label for="password">Mật khẩu</label>
+          <input type="password" id="password" required>
+        </div>
+        <button type="submit" class="btn">
+          <i class="material-icons">login</i> Đăng nhập
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div id="admin-container" class="container" style="display: none;">
+    <header>
+      <div class="logo">
+        <img src="logo.png" alt="Logo" id="admin-logo">
+        <div class="logo-text">
+          <h1>Quản trị chuyên đề</h1>
+          <p>Hệ thống ôn luyện trắc nghiệm Chi nhánh Cần Thơ II</p>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button id="logout-btn" class="btn btn-outline">
+          <i class="material-icons">logout</i> Đăng xuất
+        </button>
+      </div>
+    </header>
+    
+    <div class="content">
+      <div class="topic-form">
+        <h2>Thêm chuyên đề mới</h2>
+        <form id="topic-form">
+          <div class="form-group">
+            <label for="topic-name">Tên chuyên đề</label>
+            <input type="text" id="topic-name" class="form-control" placeholder="VD: Kiến thức cơ bản" required>
+          </div>
+          <div class="form-group file-upload">
+            <label for="file-quiz">File Excel câu hỏi</label>
+            <input type="file" id="file-quiz" accept=".xlsx,.xls" required>
+            <small>Định dạng hỗ trợ: .xlsx, .xls</small>
+          </div>
+          <button type="submit" class="btn btn-save">
+            <i class="material-icons">add_circle</i> Tạo chuyên đề
+          </button>
+          <span id="topic-msg" class="ml-2"></span>
+        </form>
+      </div>
+
+      <div class="topic-list">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h2 style="margin: 0;">Quản lý chuyên đề</h2>
+          <div>
+            <button id="topic-view-toggle" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.9rem;">
+              <i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới
+            </button>
+            <button id="add-topic-btn" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.9rem; margin-left: 8px;">
+              <i class="material-icons" style="font-size: 1.2rem;">add</i> Thêm mới
+            </button>
+          </div>
+        </div>
+        
+        <!-- Dropdown View -->
+        <div id="topic-dropdown-view">
+          <div class="form-group">
+            <label for="topic-selector">Chọn chuyên đề để xem/sửa</label>
+            <div style="display: flex; gap: 8px;">
+              <select id="topic-selector" class="form-control" style="flex: 1;">
+                <option value="">-- Chọn chuyên đề --</option>
+              </select>
+              <button id="edit-topic-btn" class="btn btn-outline" disabled>
+                <i class="material-icons">edit</i> Sửa
+              </button>
+              <button id="delete-topic-btn" class="btn btn-delete" disabled>
+                <i class="material-icons">delete</i> Xóa
+              </button>
+            </div>
+          </div>
+          <div id="topic-detail-container" style="display: none; margin-top: 16px;">
+            <div class="topic-item" id="selected-topic-detail">
+              <div class="topic-info">
+                <h3 id="selected-topic-name"></h3>
+                <div class="topic-meta">
+                  <span id="selected-topic-questions">0</span> câu hỏi
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Grid View -->
+        <div id="topic-grid-view" style="display: none;">
+          <div id="topic-list-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;"></div>
+        </div>
+      </div>
+
+      <div class="exam-list">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h2 style="margin: 0;">Quản lý bài thi</h2>
+          <button id="exam-view-toggle" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.9rem;">
+            <i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới
+          </button>
+        </div>
+        
+        <!-- Dropdown View -->
+        <div id="exam-dropdown-view">
+          <div class="form-group">
+            <label for="exam-selector">Chọn bài thi để xem/sửa</label>
+            <div style="display: flex; gap: 8px;">
+              <select id="exam-selector" class="form-control" style="flex: 1;">
+                <option value="">-- Chọn bài thi --</option>
+              </select>
+              <button id="edit-exam-btn" class="btn btn-outline" disabled>
+                <i class="material-icons">edit</i> Sửa
+              </button>
+              <button id="delete-exam-btn" class="btn btn-delete" disabled>
+                <i class="material-icons">delete</i> Xóa
+              </button>
+            </div>
+          </div>
+          <div id="exam-detail-container" style="display: none; margin-top: 16px;">
+            <div class="topic-item" id="selected-exam-detail">
+              <div class="topic-info">
+                <h3 id="selected-exam-name"></h3>
+                <div class="topic-meta">
+                  <span id="selected-exam-questions">0</span> câu hỏi • 
+                  <span id="selected-exam-duration">0</span> phút
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Grid View -->
+        <div id="exam-grid-view" style="display: none;">
+          <div id="exam-list-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;"></div>
+        </div>
+      </div>
+
+      <!-- Edit Topic Modal -->
+      <div id="edit-topic-modal" class="modal hidden">
+        <div class="modal-content">
+          <h3>Sửa chuyên đề</h3>
+          <form id="edit-topic-form">
+            <input type="hidden" id="edit-topic-id">
+            <div class="form-group">
+              <label for="edit-topic-name">Tên chuyên đề</label>
+              <input type="text" id="edit-topic-name" required>
+            </div>
+            <div class="form-group file-upload">
+              <label for="edit-topic-file">Thay thế câu hỏi bằng file Excel (tuỳ chọn)</label>
+              <input type="file" id="edit-topic-file" accept=".xlsx,.xls">
+              <small>Nếu không chọn file, hệ thống chỉ đổi tên chuyên đề.</small>
+            </div>
+            <div class="modal-actions">
+              <button type="button" id="edit-topic-cancel" class="btn btn-outline">Hủy</button>
+              <button type="submit" class="btn">Lưu</button>
+              <span id="edit-topic-msg" class="ml-2"></span>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Edit Exam Modal -->
+      <div id="edit-exam-modal" class="modal hidden">
+        <div class="modal-content">
+          <h3>Sửa bài thi</h3>
+          <form id="edit-exam-form">
+            <input type="hidden" id="edit-exam-id">
+            <div class="form-group">
+              <label for="edit-exam-name">Tên bài thi</label>
+              <input type="text" id="edit-exam-name" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-exam-total">Tổng số câu hỏi</label>
+              <input type="number" id="edit-exam-total" min="1" step="1" required>
+            </div>
+            <div class="form-group">
+              <label for="edit-exam-duration">Thời gian làm bài (phút)</label>
+              <input type="number" id="edit-exam-duration" min="1" step="1" required>
+            </div>
+            <div class="form-group">
+              <label style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" id="edit-exam-allow-pause">
+                Cho phép tạm dừng (Pause/Resume)
+              </label>
+            </div>
+            <div class="form-group">
+              <label>Chọn chuyên đề và tỷ lệ (%)</label>
+              <div id="edit-exam-topic-percents"></div>
+              <small>Tổng tỷ lệ phải bằng 100%.</small>
+            </div>
+            <div class="modal-actions">
+              <button type="button" id="edit-exam-cancel" class="btn btn-outline">Hủy</button>
+              <button type="submit" class="btn">Lưu</button>
+              <span id="edit-exam-msg" class="ml-2"></span>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="topic-form">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h2 style="margin: 0;">Tạo bộ đề tổng hợp</h2>
+          <button id="exam-builder-view-toggle" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.9rem;">
+            <i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới
+          </button>
+        </div>
+        <form id="exam-builder-form">
+          <div class="form-group">
+            <label for="exam-name">Tên bộ đề</label>
+            <input type="text" id="exam-name" placeholder="VD: Bộ đề tổng hợp tháng 10" required>
+          </div>
+          <div class="form-group">
+            <label for="exam-total">Tổng số câu hỏi</label>
+            <input type="number" id="exam-total" min="1" step="1" placeholder="VD: 50" required>
+          </div>
+          <div class="form-group">
+            <label for="exam-duration">Thời gian làm bài (phút)</label>
+            <input type="number" id="exam-duration" min="1" step="1" placeholder="VD: 30" required>
+          </div>
+          <div class="form-group">
+            <label style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="exam-allow-pause">
+              Cho phép tạm dừng (Pause/Resume)
+            </label>
+            <small>Khi bật, thí sinh có thể tạm dừng đồng hồ đếm ngược và tiếp tục sau đó.</small>
+          </div>
+          <div class="form-group">
+            <label>Chọn chuyên đề và tỷ lệ (%) trên tổng số câu của bộ đề</label>
+            
+            <!-- Dropdown View (Combobox) -->
+            <div id="exam-builder-dropdown-view">
+              <div id="exam-topic-percents">
+                <div id="exam-builder-combobox-rows" style="display: flex; flex-direction: column; gap: 12px;"></div>
+                <div id="percent-summary" style="padding: 12px; background: #e3f2fd; border-radius: 8px; text-align: center; font-weight: 500; margin-top: 16px;">
+                  Tổng tỷ lệ: <span id="total-percent">0</span>%
+                </div>
+              </div>
+            </div>
+            
+            <!-- Grid View (Checkbox) -->
+            <div id="exam-builder-grid-view" style="display: none;">
+              <div id="exam-topic-percents-grid">
+                <p style="color: #666; font-style: italic;">Đang tải danh sách chuyên đề...</p>
+              </div>
+            </div>
+            
+            <small>Lưu ý: Tỷ lệ là phần trăm trên TỔNG SỐ CÂU của bộ đề. Tổng tỷ lệ phải bằng 100%.</small>
+          </div>
+          <button type="submit" class="btn btn-save">
+            <i class="material-icons">playlist_add</i> Tạo bộ đề
+          </button>
+          <span id="exam-builder-msg" class="ml-2"></span>
+        </form>
+      </div>
+      
+      <div class="mt-4 admin-actions">
+        <a href="index.html" class="btn btn-outline" title="Về trang chủ">
+          <i class="material-icons">home</i> Về trang chủ
+        </a>
+        <button id="export-json-btn" class="btn" title="Tải xuống dữ liệu topics.json">
+          <i class="material-icons">file_download</i> Tải xuống topics.json
+        </button>
+        <button id="import-json-btn" class="btn" title="Import file topics.json từ máy" style="background: #28a745; border-color: #28a745;">
+          <i class="material-icons">file_upload</i> Import topics.json
+        </button>
+        <input type="file" id="import-json-file" accept=".json" style="display: none;">
+      </div>
+    </div>
+  </div>
+
+  </div>
+  
+  <footer class="footer-copyright" style="text-align: center; padding: 20px; margin-top: 40px; background: #f8f6f8; border-top: 1px solid #eee; color: #800020;">
+    <strong>Bản quyền © 2025 Hệ thống ôn luyện trắc nghiệm Cần Thơ II.</strong><br>  
+    Liên hệ: Nguyễn Thành Trung
+    📱 Cellphone: 0947.86.86.82
+    📧 Email: trungnguyenthanh1@agribank.com.vn
+  </footer>
+  
+  <script src="admin_script.js"></script>
+  <script src="exam_builder_combobox.js"></script>
+  <script src="mobile-touch.js"></script>
+</body>
+</html>

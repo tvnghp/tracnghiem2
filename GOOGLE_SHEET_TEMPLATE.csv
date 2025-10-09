@@ -1,0 +1,6 @@
+Timestamp,User ID,Full Name,Branch,Topic ID,Topic Name,Is Exam,Total Questions,Correct Answers,Wrong Answers,Score (%),Duration (minutes),IP Address,User Agent
+2025-01-10 10:30:00,user_1234567890,Nguyễn Văn A,Chi nhánh Cần Thơ II,topic_1,Tin dụng,No,20,18,2,90,15,192.168.1.1,Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+2025-01-10 11:15:00,user_0987654321,Trần Thị B,Chi nhánh Cần Thơ II,topic_2,Tín dụng,No,25,22,3,88,18,192.168.1.2,Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+2025-01-10 14:20:00,user_1122334455,Lê Văn C,Chi nhánh Cần Thơ II,topic_1,Tin dụng,No,20,19,1,95,12,192.168.1.3,Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36
+2025-01-10 16:45:00,user_5566778899,Phạm Thị D,Chi nhánh Cần Thơ II,topic_3,Thanh toán,Yes,30,27,3,90,25,192.168.1.4,Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
+2025-01-10 09:30:00,user_9988776655,Hoàng Văn E,Chi nhánh Cần Thơ II,topic_2,Tín dụng,No,25,24,1,96,16,192.168.1.5,Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36

@@ -1,0 +1,17 @@
+{
+  "appId": "vn.agribank.cantho2.quiz",
+  "appName": "Quiz Can Tho II",
+  "webDir": "www",
+  "cordova": {
+    "preferences": {
+      "DisallowOverscroll": "true",
+      "android-minSdkVersion": "24",
+      "android-targetSdkVersion": "33",
+      "Orientation": "default",
+      "Fullscreen": "false",
+      "StatusBarOverlaysWebView": "false",
+      "StatusBarBackgroundColor": "#800020",
+      "StatusBarStyle": "lightcontent"
+    }
+  }
+}

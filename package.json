@@ -1,0 +1,27 @@
+{
+  "name": "quiz-cantho2",
+  "version": "1.0.0",
+  "description": "Hệ thống ôn luyện trắc nghiệm Chi nhánh Cần Thơ II",
+  "main": "index.html",
+  "scripts": {
+    "cordova-build": "cordova build android",
+    "cordova-run": "cordova run android",
+    "cordova-emulate": "cordova emulate android"
+  },
+  "keywords": [
+    "quiz",
+    "agribank",
+    "cantho"
+  ],
+  "author": "Nguyễn Thành Trung <trungnguyenthanh1@agribank.com.vn>",
+  "license": "MIT",
+  "devDependencies": {
+    "cordova": "^12.0.0",
+    "cordova-android": "^12.0.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/cli": "^7.4.3",
+    "@capacitor/core": "^7.4.3"
+  }
+}

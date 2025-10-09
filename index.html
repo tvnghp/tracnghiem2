@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Hệ thống ôn luyện trắc nghiệm Chi nhánh Cần Thơ II</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="mobile-enhancements.css">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  
+  <!-- Theme and PWA meta tags -->
+  <meta name="theme-color" content="#800020">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="format-detection" content="telephone=no">
+  
+  <!-- iOS specific meta tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Quiz Cần Thơ II">
+  <!-- Excel export library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <meta name="apple-touch-fullscreen" content="yes">
+  <link rel="apple-touch-icon" href="logo.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="logo.png">
+  
+  <!-- Android specific meta tags -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="Quiz Cần Thơ II">
+  <meta name="msapplication-TileColor" content="#800020">
+  <meta name="msapplication-tap-highlight" content="no">
+  
+  <!-- Android Chrome specific -->
+  <meta name="theme-color" content="#800020" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#800020" media="(prefers-color-scheme: dark)">
+  
+  <!-- Manifest and icons -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="logo.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="logo.png">
+  <!-- Config file -->
+  <script src="config.js"></script>
+  <style>
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    /* iPhone specific optimizations */
+    @supports (-webkit-touch-callout: none) {
+      body {
+        -webkit-font-smoothing: antialiased;
+        -webkit-text-size-adjust: 100%;
+      }
+      
+      input, select, textarea {
+        -webkit-appearance: none;
+        border-radius: 0;
+      }
+      
+      button {
+        -webkit-appearance: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+    }
+    
+    /* Android specific optimizations */
+    @supports not (-webkit-touch-callout: none) {
+      body {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+      
+      input, select, textarea {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        border-radius: 8px;
+      }
+      
+      button {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        -webkit-tap-highlight-color: transparent;
+        -moz-tap-highlight-color: transparent;
+        tap-highlight-color: transparent;
+      }
+      
+      /* Android Chrome specific optimizations */
+      .container {
+        -webkit-overflow-scrolling: touch;
+        overflow-scrolling: touch;
+      }
+      
+      /* Better touch targets for Android */
+      .btn, .answer, .topic-card {
+        min-height: 48px;
+        min-width: 48px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <img src="logo.png" alt="Logo" id="logo-img">
+        <div class="logo-text">
+          <h1>Hệ thống ôn luyện trắc nghiệm</h1>
+          <p>Chi nhánh Cần Thơ II</p>
+        </div>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="welcome-section">
+        <h2>Chào mừng đến với hệ thống ôn luyện trắc nghiệm Cần Thơ II</h2>
+        <p>Chọn chuyên mục phù hợp bên dưới:</p>
+      </div>
+
+      <section class="mt-4">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 style="margin: 0;">Chuyên đề (không giới hạn thời gian)</h3>
+          <button id="topic-view-toggle" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.9rem;">
+            <i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới
+          </button>
+        </div>
+        
+        <!-- Dropdown View -->
+        <div id="topic-dropdown-view">
+          <div class="form-group">
+            <label for="topic-select">Chọn chuyên đề để bắt đầu</label>
+            <select id="topic-select" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #d4a5a5; font-size: 1rem;">
+              <option value="">-- Chọn chuyên đề --</option>
+            </select>
+          </div>
+          <div id="topic-info" style="display: none; margin-top: 16px; padding: 16px; background: #f8f6f8; border-radius: 8px; border-left: 4px solid #800020;">
+            <p id="topic-description" style="margin: 0 0 12px; color: #666;"></p>
+            <a id="topic-start-btn" href="#" class="btn" style="display: inline-flex;">
+              <i class="material-icons">play_arrow</i> Bắt đầu
+            </a>
+          </div>
+        </div>
+        
+        <!-- Grid View -->
+        <div id="topic-grid-view" style="display: none;">
+          <div id="topics-container" class="topics-grid"></div>
+        </div>
+      </section>
+
+      <section class="mt-4">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 style="margin: 0;">Bài thi (có thời gian)</h3>
+          <button id="exam-view-toggle" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.9rem;">
+            <i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới
+          </button>
+        </div>
+        
+        <!-- Dropdown View -->
+        <div id="exam-dropdown-view">
+          <div class="form-group">
+            <label for="exam-select">Chọn bài thi để bắt đầu</label>
+            <select id="exam-select" style="width: 100%; padding: 12px; border-radius: 8px; border: 2px solid #d4a5a5; font-size: 1rem;">
+              <option value="">-- Chọn bài thi --</option>
+            </select>
+          </div>
+          <div id="exam-info" style="display: none; margin-top: 16px; padding: 16px; background: #f8f6f8; border-radius: 8px; border-left: 4px solid #800020;">
+            <p id="exam-description" style="margin: 0 0 12px; color: #666;"></p>
+            <a id="exam-start-btn" href="#" class="btn" style="display: inline-flex;">
+              <i class="material-icons">play_arrow</i> Bắt đầu thi
+            </a>
+          </div>
+        </div>
+        
+        <!-- Grid View -->
+        <div id="exam-grid-view" style="display: none;">
+          <div id="exams-container" class="topics-grid"></div>
+        </div>
+      </section>
+
+      <div class="admin-section">
+        <a href="admin.html" class="btn btn-outline">
+          <i class="material-icons">admin_panel_settings</i> Quản trị viên
+        </a>
+        <button id="clear-cookies-btn" type="button" class="btn btn-outline" style="margin-left:8px">
+          <i class="material-icons">delete</i> Xóa cookie
+        </button>
+        <button id="clear-storage-btn" type="button" class="btn btn-outline" style="margin-left:8px">
+          <i class="material-icons">delete_sweep</i> Xóa bộ nhớ (local/session)
+        </button>
+        <button id="refresh-data-btn" type="button" class="btn btn-outline" style="margin-left:8px">
+          <i class="material-icons">refresh</i> Tải lại dữ liệu
+        </button>
+        <button id="global-stats-btn" type="button" class="btn btn-outline" style="margin-left:8px">
+          <i class="material-icons">analytics</i> Thống kê tổng quát
+        </button>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        const topicSelect = document.getElementById('topic-select');
+        const examSelect = document.getElementById('exam-select');
+        const topicInfo = document.getElementById('topic-info');
+        const examInfo = document.getElementById('exam-info');
+        const topicDescription = document.getElementById('topic-description');
+        const examDescription = document.getElementById('exam-description');
+        const topicStartBtn = document.getElementById('topic-start-btn');
+        const examStartBtn = document.getElementById('exam-start-btn');
+        const clearCookiesBtn = document.getElementById('clear-cookies-btn');
+        const clearStorageBtn = document.getElementById('clear-storage-btn');
+        const refreshDataBtn = document.getElementById('refresh-data-btn');
+        const globalStatsBtn = document.getElementById('global-stats-btn');
+
+        function showEmptyState() {
+          topicSelect.innerHTML = '<option value="">-- Chưa có chuyên đề --</option>';
+          examSelect.innerHTML = '<option value="">-- Chưa có bài thi --</option>';
+          topicInfo.style.display = 'none';
+          examInfo.style.display = 'none';
+          
+          // Show error message
+          const errorMsg = document.createElement('div');
+          errorMsg.id = 'loading-error';
+          errorMsg.style.cssText = `
+            background: #ffebee;
+            color: #c62828;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 16px 0;
+            border-left: 4px solid #f44336;
+            text-align: center;
+          `;
+          errorMsg.innerHTML = `
+            <i class="material-icons" style="vertical-align: middle; margin-right: 8px;">error</i>
+            Không thể tải dữ liệu. Vui lòng thử các cách sau:
+            <br><br>
+            <strong>Cách 1:</strong> Nhấn nút "Tải lại dữ liệu" bên dưới
+            <br><strong>Cách 2:</strong> Kiểm tra kết nối mạng và tải lại trang
+            <br><strong>Cách 3:</strong> Xóa cache trình duyệt (Ctrl+F5)
+            <br><br>
+            <small>Nếu vẫn không được, liên hệ quản trị viên: trungnguyenthanh1@agribank.com.vn</small>
+          `;
+          
+          const container = document.querySelector('.content');
+          const existingError = document.getElementById('loading-error');
+          if (existingError) {
+            existingError.remove();
+          }
+          container.insertBefore(errorMsg, container.firstChild);
+        }
+        
+        function showLoadingState() {
+          const loadingMsg = document.createElement('div');
+          loadingMsg.id = 'loading-indicator';
+          loadingMsg.style.cssText = `
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 16px 0;
+            border-left: 4px solid #2196f3;
+            text-align: center;
+          `;
+          loadingMsg.innerHTML = `
+            <i class="material-icons" style="vertical-align: middle; margin-right: 8px; animation: spin 1s linear infinite;">refresh</i>
+            Đang tải dữ liệu...
+          `;
+          
+          const container = document.querySelector('.content');
+          const existingLoading = document.getElementById('loading-indicator');
+          const existingError = document.getElementById('loading-error');
+          if (existingLoading) existingLoading.remove();
+          if (existingError) existingError.remove();
+          container.insertBefore(loadingMsg, container.firstChild);
+        }
+        
+        function hideLoadingState() {
+          const loading = document.getElementById('loading-indicator');
+          if (loading) loading.remove();
+        }
+
+        function clearAllCookies() {
+          try {
+            const cookies = document.cookie ? document.cookie.split(';') : [];
+            const past = 'Thu, 01 Jan 1970 00:00:00 GMT';
+            const hostnameParts = location.hostname ? location.hostname.split('.') : [];
+            const domains = [''];
+            for (let i = 0; i < hostnameParts.length; i++) {
+              const d = '.' + hostnameParts.slice(i).join('.');
+              if (d !== '.') domains.push(d);
+            }
+            const paths = Array.from(new Set(['/','/' + location.pathname.split('/').filter(Boolean).join('/')]))
+                              .filter(Boolean);
+
+            for (const c of cookies) {
+              const eqPos = c.indexOf('=');
+              const name = (eqPos > -1 ? c.substr(0, eqPos) : c).trim();
+              for (const domain of domains) {
+                for (const p of paths) {
+                  document.cookie = `${name}=; expires=${past}; path=${p};${domain ? ` domain=${domain};` : ''} SameSite=Lax`;
+                }
+              }
+            }
+            alert('Đã xóa tất cả cookie của trang.');
+          } catch (e) {
+            alert('Không thể xóa cookie: ' + (e && e.message ? e.message : e));
+          }
+        }
+
+        function clearWebStorage() {
+          try {
+            localStorage.clear();
+            sessionStorage.clear();
+            alert('Đã xóa localStorage và sessionStorage.');
+          } catch (e) {
+            alert('Không thể xóa web storage: ' + (e && e.message ? e.message : e));
+          }
+        }
+
+        if (clearCookiesBtn) {
+          clearCookiesBtn.addEventListener('click', clearAllCookies);
+        }
+
+        if (clearStorageBtn) {
+          clearStorageBtn.addEventListener('click', clearWebStorage);
+        }
+
+        if (refreshDataBtn) {
+          refreshDataBtn.addEventListener('click', function() {
+            // Clear cached data and reload
+            localStorage.removeItem('quiz_topics');
+            loadTopics();
+          });
+        }
+
+
+        if (globalStatsBtn) {
+          globalStatsBtn.addEventListener('click', function() {
+            showGlobalStatistics();
+          });
+        }
+
+    function showGlobalStatistics() {
+      // Remove any existing global statistics modal
+      const existingModal = document.querySelector('.global-statistics-modal');
+      if (existingModal) {
+        existingModal.remove();
+      }
+      
+      const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
+      const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
+      
+      if (allStats.length === 0) {
+        alert('Chưa có dữ liệu thống kê nào! Hãy làm một số bài quiz trước.');
+        return;
+      }
+      
+      // Calculate overall statistics
+      const totalAttempts = allStats.length;
+      const avgScore = Math.round(allStats.reduce((sum, s) => sum + s.score, 0) / totalAttempts);
+      const bestScore = Math.max(...allStats.map(s => s.score));
+      const totalQuestions = allStats.reduce((sum, s) => sum + s.totalQuestions, 0);
+      const totalCorrect = allStats.reduce((sum, s) => sum + s.correctAnswers, 0);
+      const totalWrong = allStats.reduce((sum, s) => sum + s.wrongAnswers, 0);
+      
+      // Group by topic
+      const topicStats = {};
+      allStats.forEach(stat => {
+        if (!topicStats[stat.topicId]) {
+          topicStats[stat.topicId] = {
+            topicId: stat.topicId,
+            name: stat.topicName,
+            attempts: 0,
+            totalScore: 0,
+            bestScore: 0,
+            totalQuestions: 0,
+            totalCorrect: 0,
+            totalWrong: 0,
+            isExam: stat.isExam
+          };
+        }
+        topicStats[stat.topicId].attempts++;
+        topicStats[stat.topicId].totalScore += stat.score;
+        topicStats[stat.topicId].bestScore = Math.max(topicStats[stat.topicId].bestScore, stat.score);
+        topicStats[stat.topicId].totalQuestions += stat.totalQuestions;
+        topicStats[stat.topicId].totalCorrect += stat.correctAnswers;
+        topicStats[stat.topicId].totalWrong += stat.wrongAnswers;
+      });
+      
+      // Calculate averages for each topic
+      Object.values(topicStats).forEach(topic => {
+        topic.avgScore = Math.round(topic.totalScore / topic.attempts);
+      });
+      
+      // Sort topics by average score (descending)
+      const sortedTopics = Object.values(topicStats).sort((a, b) => b.avgScore - a.avgScore);
+      
+      // Group wrong answers by topic
+      const wrongAnswersByTopic = {};
+      allWrongAnswers.forEach(answer => {
+        if (!wrongAnswersByTopic[answer.topicId]) {
+          wrongAnswersByTopic[answer.topicId] = [];
+        }
+        wrongAnswersByTopic[answer.topicId].push(answer);
+      });
+      
+      // Create full-screen global statistics page
+      const modal = document.createElement('div');
+      modal.className = 'modal global-statistics-modal';
+      modal.innerHTML = `
+        <div style="
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background: white;
+          z-index: 10000;
+          overflow-y: auto;
+          padding: 20px;
+        ">
+          <!-- Header -->
+          <div style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+          ">
+            <h2 style="color: #800020; margin: 0; font-size: 28px;">
+              📊 Thống kê tổng quát
+            </h2>
+            <button onclick="this.closest('.global-statistics-modal').remove()" style="
+              background: #c62828;
+              color: white;
+              border: none;
+              border-radius: 50%;
+              width: 40px;
+              height: 40px;
+              cursor: pointer;
+              font-size: 20px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            ">×</button>
+          </div>
+          
+          <!-- Overall Statistics Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 40px;">
+            <div style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+              <div style="font-size: 36px; font-weight: bold; color: #1976d2; margin-bottom: 8px;">${totalAttempts}</div>
+              <div style="color: #666; font-size: 16px; font-weight: 500;">Tổng số lần làm bài</div>
+            </div>
+            <div style="background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c8 100%); padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+              <div style="font-size: 36px; font-weight: bold; color: #2e7d32; margin-bottom: 8px;">${avgScore}%</div>
+              <div style="color: #666; font-size: 16px; font-weight: 500;">Điểm trung bình</div>
+            </div>
+            <div style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+              <div style="font-size: 36px; font-weight: bold; color: #f57c00; margin-bottom: 8px;">${bestScore}%</div>
+              <div style="color: #666; font-size: 16px; font-weight: 500;">Điểm cao nhất</div>
+            </div>
+            <div style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+              <div style="font-size: 36px; font-weight: bold; color: #7b1fa2; margin-bottom: 8px;">${sortedTopics.length}</div>
+              <div style="color: #666; font-size: 16px; font-weight: 500;">Chuyên đề đã làm</div>
+            </div>
+            <div style="background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 100%); padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+              <div style="font-size: 36px; font-weight: bold; color: #00695c; margin-bottom: 8px;">${totalCorrect}</div>
+              <div style="color: #666; font-size: 16px; font-weight: 500;">Câu trả lời đúng</div>
+            </div>
+            <div style="background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%); padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+              <div style="font-size: 36px; font-weight: bold; color: #c62828; margin-bottom: 8px;">${totalWrong}</div>
+              <div style="color: #666; font-size: 16px; font-weight: 500;">Câu trả lời sai</div>
+            </div>
+          </div>
+          
+          <!-- Online Leaderboard -->
+          <div class="online-leaderboard-section" style="margin-bottom: 40px;">
+            <h3 style="color: #800020; margin-bottom: 20px; font-size: 22px;">🏆 Bảng xếp hạng Online</h3>
+            <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+              <div id="online-leaderboard" style="padding: 20px;">
+                <div style="text-align: center; padding: 40px; color: #666;">
+                  <div style="font-size: 48px; margin-bottom: 16px;">🌐</div>
+                  <h4 style="color: #800020; margin-bottom: 8px;">Đang tải dữ liệu từ trang web...</h4>
+                  <p>Kết nối với <a href="https://tvnghp.github.io/Tracnghiem/" target="_blank" style="color: #1976d2;">tvnghp.github.io/Tracnghiem</a></p>
+                  <button onclick="loadOnlineLeaderboard()" style="
+                    background: #1976d2;
+                    color: white;
+                    border: none;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    font-size: 16px;
+                    margin-top: 16px;
+                  ">
+                    🔄 Tải lại
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Topic Statistics -->
+          <div style="margin-bottom: 40px;">
+            <h3 style="color: #800020; margin-bottom: 20px; font-size: 22px;">📈 Thống kê theo chuyên đề</h3>
+            <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+              <table style="width: 100%; border-collapse: collapse;">
+                <thead style="background: #f5f5f5;">
+                  <tr>
+                    <th style="padding: 16px; text-align: left; font-weight: 600; color: #333;">Chuyên đề</th>
+                    <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Loại</th>
+                    <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Lần làm</th>
+                    <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Điểm TB</th>
+                    <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Cao nhất</th>
+                    <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Câu sai</th>
+                    <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${sortedTopics.map((topic, index) => `
+                    <tr style="border-bottom: 1px solid #f0f0f0;">
+                      <td style="padding: 16px; color: #333; font-weight: 600;">${topic.name}</td>
+                      <td style="padding: 16px; text-align: center;">
+                        <span style="background: ${topic.isExam ? '#ff9800' : '#4caf50'}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">
+                          ${topic.isExam ? 'EXAM' : 'TOPIC'}
+                        </span>
+                      </td>
+                      <td style="padding: 16px; text-align: center; color: #666;">${topic.attempts}</td>
+                      <td style="padding: 16px; text-align: center; color: ${topic.avgScore >= 80 ? '#2e7d32' : topic.avgScore >= 60 ? '#f57c00' : '#c62828'}; font-weight: bold; font-size: 18px;">${topic.avgScore}%</td>
+                      <td style="padding: 16px; text-align: center; color: #666;">${topic.bestScore}%</td>
+                      <td style="padding: 16px; text-align: center; color: #c62828; font-weight: 600;">${topic.totalWrong}</td>
+                      <td style="padding: 12px; text-align: center;">
+                        <div style="display: flex; gap: 6px; justify-content: center; flex-direction: column;">
+                          <button onclick="exportTopicStatisticsExcel('${topic.topicId}')" style="background: #1976d2; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='#1565c0'" onmouseout="this.style.background='#1976d2'" title="Xuất Excel">
+                            <i class="material-icons" style="font-size: 14px;">download</i> Excel
+                          </button>
+                          <button onclick="createQuizFromWrongAnswers('${topic.topicId}', '${topic.name}')" style="background: #4caf50; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='#45a049'" onmouseout="this.style.background='#4caf50'" title="Tạo bài thi từ câu sai">
+                            <i class="material-icons" style="font-size: 14px;">quiz</i> Tạo bài
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          <!-- Action Buttons -->
+          <div style="display: flex; gap: 16px; justify-content: center; padding: 30px 0; border-top: 2px solid #e0e0e0;">
+            <button onclick="exportGlobalStatisticsExcel()" class="btn" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; font-size: 16px;">
+              <i class="material-icons">download</i> Xuất Excel (.xlsx)
+            </button>
+            <button onclick="exportGlobalStatistics()" class="btn btn-outline" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; font-size: 16px;">
+              <i class="material-icons">description</i> Xuất CSV
+            </button>
+            <button onclick="this.closest('.global-statistics-modal').remove()" class="btn btn-outline" style="padding: 12px 24px; font-size: 16px;">
+              <i class="material-icons">close</i> Đóng
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+      
+      // Load online leaderboard after modal is created
+      setTimeout(() => {
+        loadOnlineLeaderboard();
+      }, 100);
+    }
+
+    // Function to load online leaderboard data from Google Sheets
+    async function loadOnlineLeaderboard() {
+      const leaderboardContainer = document.getElementById('online-leaderboard');
+      if (!leaderboardContainer) return;
+      
+      // Show loading state
+      leaderboardContainer.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: #666;">
+          <div style="font-size: 48px; margin-bottom: 16px;">⏳</div>
+          <h4 style="color: #800020; margin-bottom: 8px;">Đang tải dữ liệu...</h4>
+          <p>Kết nối với Google Sheets để lấy bảng xếp hạng</p>
+        </div>
+      `;
+      
+      try {
+        // Check if Google Sheets is configured
+        if (!window.QUIZ_CONFIG || !window.isConfigured()) {
+          throw new Error('Google Sheets chưa được cấu hình');
+        }
+        
+        // Fetch data from Google Sheets
+        const response = await fetch(`${window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL}?action=getLeaderboard`);
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.message || 'Không thể lấy dữ liệu');
+        }
+        
+        const data = result.data;
+        
+        // Display the leaderboard
+        displayOnlineLeaderboard(data, leaderboardContainer);
+        
+      } catch (error) {
+        console.error('Error loading online leaderboard:', error);
+        
+        // Hide the entire online leaderboard section if can't connect
+        const onlineLeaderboardSection = leaderboardContainer.closest('.online-leaderboard-section');
+        if (onlineLeaderboardSection) {
+          onlineLeaderboardSection.style.display = 'none';
+        }
+      }
+    }
+    
+    // Display the online leaderboard data
+    function displayOnlineLeaderboard(data, container) {
+      const { leaderboard, totalAttempts, avgScore, bestScore, lastUpdate } = data;
+      
+      if (!leaderboard || leaderboard.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 40px; color: #666;">
+            <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
+            <h4 style="color: #800020; margin-bottom: 8px;">Chưa có dữ liệu</h4>
+            <p>Chưa có ai làm bài trên hệ thống online</p>
+            <button onclick="loadOnlineLeaderboard()" style="
+              background: #4caf50;
+              color: white;
+              border: none;
+              padding: 10px 20px;
+              border-radius: 6px;
+              cursor: pointer;
+              font-size: 14px;
+              margin-top: 16px;
+            ">
+              🔄 Tải lại
+            </button>
+          </div>
+        `;
+        return;
+      }
+      
+      container.innerHTML = `
+        <div style="padding: 20px;">
+          <!-- Summary Stats -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+            <div style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); padding: 16px; border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-weight: bold; color: #1976d2;">${totalAttempts}</div>
+              <div style="color: #666; font-size: 14px;">Tổng lần làm bài</div>
+            </div>
+            <div style="background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c8 100%); padding: 16px; border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-weight: bold; color: #2e7d32;">${avgScore}%</div>
+              <div style="color: #666; font-size: 14px;">Điểm trung bình</div>
+            </div>
+            <div style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); padding: 16px; border-radius: 8px; text-align: center;">
+              <div style="font-size: 24px; font-weight: bold; color: #f57c00;">${bestScore}%</div>
+              <div style="color: #666; font-size: 14px;">Điểm cao nhất</div>
+            </div>
+          </div>
+          
+          <!-- Top Users Leaderboard -->
+          <h4 style="color: #800020; margin-bottom: 16px; font-size: 18px;">🏆 Bảng xếp hạng người dùng</h4>
+          <div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <table style="width: 100%; border-collapse: collapse;">
+              <thead style="background: #f5f5f5;">
+                <tr>
+                  <th style="padding: 12px; text-align: center; font-weight: 600; color: #333;">Hạng</th>
+                  <th style="padding: 12px; text-align: left; font-weight: 600; color: #333;">Họ tên</th>
+                  <th style="padding: 12px; text-align: left; font-weight: 600; color: #333;">Đơn vị</th>
+                  <th style="padding: 12px; text-align: left; font-weight: 600; color: #333;">Chuyên đề</th>
+                  <th style="padding: 12px; text-align: center; font-weight: 600; color: #333;">Điểm</th>
+                  <th style="padding: 12px; text-align: center; font-weight: 600; color: #333;">Kết quả</th>
+                  <th style="padding: 12px; text-align: center; font-weight: 600; color: #333;">Thời gian</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${leaderboard.slice(0, 20).map((user, index) => `
+                  <tr style="border-bottom: 1px solid #e0e0e0; ${index < 3 ? 'background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);' : ''}">
+                    <td style="padding: 12px; text-align: center; font-weight: 600;">
+                      ${index < 3 ? ['🥇', '🥈', '🥉'][index] : `#${user.rank}`}
+                    </td>
+                    <td style="padding: 12px; font-weight: 600; color: #333;">${user.fullname}</td>
+                    <td style="padding: 12px; color: #666; font-size: 14px;">${user.branch}</td>
+                    <td style="padding: 12px;">
+                      <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="color: #333;">${user.topicName}</span>
+                        ${user.isExam ? '<span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">THI</span>' : ''}
+                      </div>
+                    </td>
+                    <td style="padding: 12px; text-align: center; font-weight: 600; color: #2e7d32; font-size: 18px;">${user.score}%</td>
+                    <td style="padding: 12px; text-align: center; color: #666; font-size: 14px;">${user.correctAnswers}/${user.totalQuestions}</td>
+                    <td style="padding: 12px; text-align: center; color: #666; font-size: 12px;">${new Date(user.timestamp).toLocaleDateString('vi-VN')}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          
+          <!-- Footer -->
+          <div style="text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e0e0e0; color: #666; font-size: 12px;">
+            <p>Cập nhật lần cuối: ${new Date(lastUpdate).toLocaleString('vi-VN')}</p>
+            <button onclick="loadOnlineLeaderboard()" style="
+              background: #4caf50;
+              color: white;
+              border: none;
+              padding: 8px 16px;
+              border-radius: 6px;
+              cursor: pointer;
+              font-size: 12px;
+              margin-top: 8px;
+            ">
+              🔄 Cập nhật
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+        function renderLists(all) {
+          const exams = all.filter(t => t && (t.isExam === true || (typeof t.durationMinutes === 'number' && t.durationMinutes > 0)));
+          const topics = all.filter(t => !(t && (t.isExam === true || (typeof t.durationMinutes === 'number' && t.durationMinutes > 0))));
+
+          // Populate topic dropdown
+          if (topics.length > 0) {
+            topicSelect.innerHTML = '<option value="">-- Chọn chuyên đề --</option>' + 
+              topics.map(topic => `<option value="${topic.id}">${topic.name} (${topic.questions ? topic.questions.length : 0} câu)</option>`).join('');
+          } else {
+            topicSelect.innerHTML = '<option value="">-- Chưa có chuyên đề --</option>';
+          }
+
+          // Populate exam dropdown
+          if (exams.length > 0) {
+            examSelect.innerHTML = '<option value="">-- Chọn bài thi --</option>' + 
+              exams.map(exam => {
+                const total = exam.examConfig?.total ?? (exam.questions ? exam.questions.length : 0);
+                const duration = exam.durationMinutes ? (exam.durationMinutes + ' phút') : 'N/A';
+                return `<option value="${exam.id}">${exam.name} (${total} câu, ${duration})</option>`;
+              }).join('');
+          } else {
+            examSelect.innerHTML = '<option value="">-- Chưa có bài thi --</option>';
+          }
+
+          // Populate topic grid
+          const topicsContainer = document.getElementById('topics-container');
+          if (topicsContainer) {
+            topicsContainer.innerHTML = topics.length ? topics.map(topic => `
+              <div class="topic-card">
+                <div class="topic-card-content">
+                  <h3>${topic.name}</h3>
+                  <p>${topic.questions ? topic.questions.length : 0} câu hỏi</p>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <a href="quiz.html?topic=${encodeURIComponent(topic.id)}" class="btn" style="flex: 1;">
+                      <i class="material-icons">play_arrow</i> Bắt đầu
+                    </a>
+                    <button onclick="exportTopicToExcel('${topic.id}')" class="btn btn-outline" style="flex: 1;" title="Xuất câu hỏi ra Excel">
+                      <i class="material-icons">download</i> Excel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            `).join('') : `
+              <div class="empty-state">
+                <i class="material-icons">folder_open</i>
+                <p>Chưa có chuyên đề nào</p>
+              </div>`;
+          }
+
+          // Populate exam grid
+          const examsContainer = document.getElementById('exams-container');
+          if (examsContainer) {
+            examsContainer.innerHTML = exams.length ? exams.map(exam => `
+              <div class="topic-card">
+                <div class="topic-card-content">
+                  <h3>${exam.name}</h3>
+                  <p>${exam.examConfig?.total ?? (exam.questions ? exam.questions.length : 0)} câu • ${exam.durationMinutes ? (exam.durationMinutes + ' phút') : 'N/A'}</p>
+                  <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <a href="quiz.html?topic=${encodeURIComponent(exam.id)}" class="btn" style="flex: 1;">
+                      <i class="material-icons">play_arrow</i> Bắt đầu
+                    </a>
+                    <button onclick="exportTopicToExcel('${exam.id}')" class="btn btn-outline" style="flex: 1;" title="Xuất câu hỏi ra Excel">
+                      <i class="material-icons">download</i> Excel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            `).join('') : `
+              <div class="empty-state">
+                <i class="material-icons">assignment</i>
+                <p>Chưa có bài thi nào</p>
+              </div>`;
+          }
+
+          // Store data for later use
+          window.allTopics = topics;
+          window.allExams = exams;
+        }
+
+        // View toggle functions
+        function toggleTopicView() {
+          const dropdownView = document.getElementById('topic-dropdown-view');
+          const gridView = document.getElementById('topic-grid-view');
+          const toggleBtn = document.getElementById('topic-view-toggle');
+          const currentView = localStorage.getItem('index_topic_view') || 'dropdown';
+          
+          if (currentView === 'dropdown') {
+            dropdownView.style.display = 'none';
+            gridView.style.display = 'block';
+            toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">list</i> Chế độ dropdown';
+            localStorage.setItem('index_topic_view', 'grid');
+          } else {
+            dropdownView.style.display = 'block';
+            gridView.style.display = 'none';
+            toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới';
+            localStorage.setItem('index_topic_view', 'dropdown');
+          }
+        }
+
+        function toggleExamView() {
+          const dropdownView = document.getElementById('exam-dropdown-view');
+          const gridView = document.getElementById('exam-grid-view');
+          const toggleBtn = document.getElementById('exam-view-toggle');
+          const currentView = localStorage.getItem('index_exam_view') || 'dropdown';
+          
+          if (currentView === 'dropdown') {
+            dropdownView.style.display = 'none';
+            gridView.style.display = 'block';
+            toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">list</i> Chế độ dropdown';
+            localStorage.setItem('index_exam_view', 'grid');
+          } else {
+            dropdownView.style.display = 'block';
+            gridView.style.display = 'none';
+            toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới';
+            localStorage.setItem('index_exam_view', 'dropdown');
+          }
+        }
+
+        function initializeViews() {
+          const topicView = localStorage.getItem('index_topic_view') || 'dropdown';
+          const examView = localStorage.getItem('index_exam_view') || 'dropdown';
+          
+          const topicDropdown = document.getElementById('topic-dropdown-view');
+          const topicGrid = document.getElementById('topic-grid-view');
+          const topicToggleBtn = document.getElementById('topic-view-toggle');
+          
+          if (topicView === 'grid') {
+            topicDropdown.style.display = 'none';
+            topicGrid.style.display = 'block';
+            topicToggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">list</i> Chế độ dropdown';
+          } else {
+            topicDropdown.style.display = 'block';
+            topicGrid.style.display = 'none';
+            topicToggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới';
+          }
+          
+          const examDropdown = document.getElementById('exam-dropdown-view');
+          const examGrid = document.getElementById('exam-grid-view');
+          const examToggleBtn = document.getElementById('exam-view-toggle');
+          
+          if (examView === 'grid') {
+            examDropdown.style.display = 'none';
+            examGrid.style.display = 'block';
+            examToggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">list</i> Chế độ dropdown';
+          } else {
+            examDropdown.style.display = 'block';
+            examGrid.style.display = 'none';
+            examToggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới';
+          }
+        }
+
+        // Initialize views on load
+        initializeViews();
+
+        // View toggle event listeners with touch optimization
+        document.getElementById('topic-view-toggle').addEventListener('click', toggleTopicView);
+        document.getElementById('exam-view-toggle').addEventListener('click', toggleExamView);
+
+        // Add touch optimization for mobile
+        if ('ontouchstart' in window) {
+          document.body.classList.add('touch-device');
+          
+          // Optimize button interactions for touch
+          document.querySelectorAll('.btn').forEach(btn => {
+            btn.addEventListener('touchstart', function() {
+              this.style.transform = 'scale(0.95)';
+            });
+            
+            btn.addEventListener('touchend', function() {
+              this.style.transform = '';
+            });
+          });
+
+          // Optimize answer interactions for touch
+          document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.answer').forEach(answer => {
+              answer.addEventListener('touchstart', function() {
+                this.style.transform = 'scale(0.98)';
+              });
+              
+              answer.addEventListener('touchend', function() {
+                this.style.transform = '';
+              });
+            });
+          });
+        }
+
+        // Topic selector change handler
+        topicSelect.addEventListener('change', function(e) {
+          const topicId = e.target.value;
+          if (!topicId) {
+            topicInfo.style.display = 'none';
+            return;
+          }
+          
+          const topic = window.allTopics.find(t => t.id === topicId);
+          if (topic) {
+            topicDescription.textContent = `${topic.questions ? topic.questions.length : 0} câu hỏi • Không giới hạn thời gian`;
+            topicStartBtn.href = `quiz.html?topic=${encodeURIComponent(topic.id)}`;
+            topicInfo.style.display = 'block';
+          }
+        });
+
+        // Exam selector change handler
+        examSelect.addEventListener('change', function(e) {
+          const examId = e.target.value;
+          if (!examId) {
+            examInfo.style.display = 'none';
+            return;
+          }
+          
+          const exam = window.allExams.find(t => t.id === examId);
+          if (exam) {
+            const total = exam.examConfig?.total ?? (exam.questions ? exam.questions.length : 0);
+            const duration = exam.durationMinutes ? (exam.durationMinutes + ' phút') : 'Không rõ thời gian';
+            const pauseText = exam.allowPause ? ' • Cho phép tạm dừng' : '';
+            examDescription.textContent = `${total} câu hỏi • ${duration}${pauseText}`;
+            examStartBtn.href = `quiz.html?topic=${encodeURIComponent(exam.id)}`;
+            examInfo.style.display = 'block';
+          }
+        });
+
+        async function loadTopics() {
+          console.log('Loading topics...');
+          showLoadingState();
+          
+          // Try to load from localStorage first
+          try {
+            const localTopicsStr = localStorage.getItem('quiz_topics');
+            if (localTopicsStr) {
+              const localTopics = JSON.parse(localTopicsStr);
+              if (Array.isArray(localTopics) && localTopics.length > 0) {
+                console.log('Loaded topics from localStorage:', localTopics.length);
+                hideLoadingState();
+                renderLists(localTopics);
+                return;
+              }
+            }
+          } catch (e) {
+            console.warn('Error loading from localStorage:', e);
+            localStorage.removeItem('quiz_topics'); // Clear corrupted data
+          }
+          
+          // Try to load from remote with multiple fallback strategies
+          const urls = [
+            './topics.json',
+            'topics.json',
+            window.location.origin + '/topics.json',
+            window.location.href.replace(/\/[^\/]*$/, '/topics.json')
+          ];
+          
+          for (const urlString of urls) {
+            try {
+              console.log('Trying to load from:', urlString);
+              const url = new URL(urlString, location.href);
+              url.searchParams.set('v', Date.now());
+              
+              const resp = await fetch(url, { 
+                cache: 'no-store',
+                headers: {
+                  'Accept': 'application/json'
+                }
+              });
+              
+              console.log('Fetch response status:', resp.status, 'for URL:', urlString);
+              
+              if (resp.ok) {
+                const remoteTopics = await resp.json();
+                console.log('Remote topics loaded:', remoteTopics);
+                
+                if (Array.isArray(remoteTopics) && remoteTopics.length > 0) {
+                  // Validate topic structure
+                  const validTopics = remoteTopics.filter(topic => 
+                    topic && 
+                    typeof topic.id === 'string' && 
+                    typeof topic.name === 'string' &&
+                    Array.isArray(topic.questions)
+                  );
+                  
+                  if (validTopics.length > 0) {
+                    try {
+                      localStorage.setItem('quiz_topics', JSON.stringify(validTopics));
+                      console.log('Valid topics saved to localStorage:', validTopics.length);
+                    } catch (storageError) {
+                      console.warn('Could not save to localStorage:', storageError);
+                    }
+                    hideLoadingState();
+                    renderLists(validTopics);
+                    return;
+                  } else {
+                    console.warn('No valid topics found in remote data');
+                  }
+                } else {
+                  console.warn('Remote topics is not a valid array or is empty');
+                }
+              } else {
+                console.error('Failed to fetch from', urlString, ':', resp.status, resp.statusText);
+              }
+            } catch(e) {
+              console.error('Error loading from', urlString, ':', e);
+            }
+          }
+          
+          // Show empty state if all methods fail
+          console.log('All loading methods failed, showing empty state');
+          hideLoadingState();
+          showEmptyState();
+        }
+
+        loadTopics();
+      });
+
+
+      // Create quiz from wrong answers
+      window.createQuizFromWrongAnswers = function(topicId, topicName) {
+        const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
+        const allTopics = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
+        
+        // Sử dụng số lần sai tối thiểu cố định
+        const minWrongCount = 1;
+        
+        const topicWrongAnswers = allWrongAnswers.filter(answer => answer.topicId === topicId);
+        
+        if (topicWrongAnswers.length === 0) {
+          alert('Chưa có câu sai nào cho chuyên đề này!');
+          return;
+        }
+        
+        // Đếm tần suất sai của mỗi câu
+        const questionFrequency = {};
+        topicWrongAnswers.forEach(answer => {
+          const key = answer.question;
+          if (!questionFrequency[key]) {
+            questionFrequency[key] = {
+              question: answer.question,
+              options: answer.options,
+              optionLabels: answer.optionLabels,
+              correctAnswer: answer.correctAnswer,
+              explanation: answer.explanation,
+              count: 0
+            };
+          }
+          questionFrequency[key].count++;
+        });
+        
+        // Lọc theo số lần sai và sắp xếp
+        const availableQuestions = Object.values(questionFrequency)
+          .filter(q => q.count >= minWrongCount)
+          .sort((a, b) => b.count - a.count);
+        
+        if (availableQuestions.length === 0) {
+          alert('Không có câu nào bị sai để tạo bài thi!');
+          return;
+        }
+        
+        // Hỏi số câu hỏi muốn tạo
+        const maxAvailable = availableQuestions.length;
+        const numQuestions = prompt(
+          'Có ' + maxAvailable + ' câu bị sai\n\n' +
+          'Bạn muốn tạo bài thi với bao nhiêu câu?',
+          Math.min(20, maxAvailable)
+        );
+        
+        if (!numQuestions || numQuestions <= 0) {
+          return; // Hủy
+        }
+        
+        const questionCount = Math.min(parseInt(numQuestions), maxAvailable);
+        const selectedQuestions = availableQuestions.slice(0, questionCount);
+        
+        const newTopicId = 'wrong_answers_quiz_' + Date.now();
+        const newTopic = {
+          id: newTopicId,
+          name: 'Ôn tập câu sai - ' + topicName + ' (' + questionCount + ' câu)',
+          questions: selectedQuestions.map(q => ({
+            question: q.question,
+            options: q.options,
+            optionLabels: q.optionLabels,
+            answer: q.correctAnswer,
+            explain: q.explanation || ''
+          })),
+          isExam: false,
+          createdFrom: 'wrong_answers',
+          sourceTopicId: topicId,
+          minWrongCount: minWrongCount,
+          createdAt: new Date().toISOString()
+        };
+        
+        const topics = allTopics;
+        topics.push(newTopic);
+        localStorage.setItem('quiz_topics', JSON.stringify(topics));
+        
+        if (confirm('Đã tạo bài thi "' + newTopic.name + '"!\n\nBạn có muốn làm bài ngay không?')) {
+          window.location.href = 'quiz.html?topic=' + newTopicId;
+        } else {
+          window.location.reload();
+        }
+      };
+
+      // Export topic to Excel function with all answers displayed
+      window.exportTopicToExcel = function(topicId) {
+        const allTopicsData = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
+        const topic = allTopicsData.find(t => t.id === topicId);
+        
+        if (!topic) {
+          alert('Không tìm thấy chuyên đề!');
+          return;
+        }
+        
+        if (!topic.questions || topic.questions.length === 0) {
+          alert('Chuyên đề này chưa có câu hỏi!');
+          return;
+        }
+        
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        
+        // Prepare data with all answers
+        const questionsData = [
+          ['Chuyên đề: ' + topic.name, '', '', '', '', '', ''],
+          ['STT', 'Câu hỏi', 'Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D', 'Đáp án đúng', 'Giải thích']
+        ];
+        
+        topic.questions.forEach((q, index) => {
+          // Map option labels to their text values
+          const optionsMap = {};
+          (q.optionLabels || []).forEach((label, i) => {
+            optionsMap[label] = q.options[i] || '';
+          });
+          
+          questionsData.push([
+            index + 1,
+            q.question || '',
+            optionsMap['A'] || '',
+            optionsMap['B'] || '',
+            optionsMap['C'] || '',
+            optionsMap['D'] || '',
+            q.answer || '',
+            q.explain || ''
+          ]);
+        });
+        
+        const ws = XLSX.utils.aoa_to_sheet(questionsData);
+        
+        // Set column widths
+        ws['!cols'] = [
+          { width: 6 },   // STT
+          { width: 60 },  // Câu hỏi
+          { width: 30 },  // Đáp án A
+          { width: 30 },  // Đáp án B
+          { width: 30 },  // Đáp án C
+          { width: 30 },  // Đáp án D
+          { width: 12 },  // Đáp án đúng
+          { width: 50 }   // Giải thích
+        ];
+        
+        XLSX.utils.book_append_sheet(wb, ws, 'Câu hỏi');
+        
+        // Save file
+        const fileName = `${topic.name.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+      };
+
+      // Export global statistics function
+      window.exportGlobalStatisticsExcel = function() {
+      const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
+      const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
+      
+      if (allStats.length === 0) {
+        alert('Không có dữ liệu thống kê nào để xuất!');
+        return;
+      }
+      
+      // Calculate overall statistics
+      const totalAttempts = allStats.length;
+      const avgScore = Math.round(allStats.reduce((sum, s) => sum + s.score, 0) / totalAttempts);
+      const bestScore = Math.max(...allStats.map(s => s.score));
+      const totalQuestions = allStats.reduce((sum, s) => sum + s.totalQuestions, 0);
+      const totalCorrect = allStats.reduce((sum, s) => sum + s.correctAnswers, 0);
+      const totalWrong = allStats.reduce((sum, s) => sum + s.wrongAnswers, 0);
+      
+      // Group by topic
+      const topicStats = {};
+      allStats.forEach(stat => {
+        if (!topicStats[stat.topicId]) {
+          topicStats[stat.topicId] = {
+            topicId: stat.topicId,
+            name: stat.topicName,
+            attempts: 0,
+            totalScore: 0,
+            bestScore: 0,
+            totalQuestions: 0,
+            totalCorrect: 0,
+            totalWrong: 0,
+            isExam: stat.isExam
+          };
+        }
+        topicStats[stat.topicId].attempts++;
+        topicStats[stat.topicId].totalScore += stat.score;
+        topicStats[stat.topicId].bestScore = Math.max(topicStats[stat.topicId].bestScore, stat.score);
+        topicStats[stat.topicId].totalQuestions += stat.totalQuestions;
+        topicStats[stat.topicId].totalCorrect += stat.correctAnswers;
+        topicStats[stat.topicId].totalWrong += stat.wrongAnswers;
+      });
+      
+      // Calculate averages for each topic
+      Object.values(topicStats).forEach(topic => {
+        topic.avgScore = Math.round(topic.totalScore / topic.attempts);
+      });
+      
+      // Sort topics by average score (descending)
+      const sortedTopics = Object.values(topicStats).sort((a, b) => b.avgScore - a.avgScore);
+      
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Summary sheet
+      const summaryData = [
+        ['Thống kê tổng quát - Hệ thống ôn luyện trắc nghiệm Cần Thơ II', ''],
+        ['Tổng số lần làm bài', totalAttempts],
+        ['Điểm trung bình', avgScore + '%'],
+        ['Điểm cao nhất', bestScore + '%'],
+        ['Tổng số câu hỏi', totalQuestions],
+        ['Tổng số câu đúng', totalCorrect],
+        ['Tổng số câu sai', totalWrong],
+        ['', ''],
+        ['Thống kê theo chuyên đề', ''],
+        ['STT', 'Tên chuyên đề', 'Loại', 'Lần làm', 'Điểm TB', 'Điểm cao nhất', 'Tổng câu', 'Đúng', 'Sai']
+      ];
+      
+      sortedTopics.forEach((topic, index) => {
+        summaryData.push([
+          index + 1,
+          topic.name,
+          topic.isExam ? 'Bài thi' : 'Chuyên đề',
+          topic.attempts,
+          topic.avgScore + '%',
+          topic.bestScore + '%',
+          topic.totalQuestions,
+          topic.totalCorrect,
+          topic.totalWrong
+        ]);
+      });
+      
+      const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+      ws1['!cols'] = [
+        { width: 8 },
+        { width: 30 },
+        { width: 12 },
+        { width: 10 },
+        { width: 12 },
+        { width: 12 },
+        { width: 10 },
+        { width: 10 },
+        { width: 10 }
+      ];
+      XLSX.utils.book_append_sheet(wb, ws1, 'Tổng quan');
+      
+      // Detailed attempts sheet
+      const attemptsData = [
+        ['Chi tiết từng lần làm bài', ''],
+        ['Thời gian', 'Tên chuyên đề', 'Loại', 'Tổng câu', 'Đúng', 'Sai', 'Điểm']
+      ];
+      
+      allStats.forEach(stat => {
+        attemptsData.push([
+          new Date(stat.timestamp).toLocaleString('vi-VN'),
+          stat.topicName,
+          stat.isExam ? 'Bài thi' : 'Chuyên đề',
+          stat.totalQuestions,
+          stat.correctAnswers,
+          stat.wrongAnswers,
+          stat.score + '%'
+        ]);
+      });
+      
+      const ws2 = XLSX.utils.aoa_to_sheet(attemptsData);
+      ws2['!cols'] = [
+        { width: 20 },
+        { width: 30 },
+        { width: 12 },
+        { width: 10 },
+        { width: 10 },
+        { width: 10 },
+        { width: 10 }
+      ];
+      XLSX.utils.book_append_sheet(wb, ws2, 'Chi tiết lần làm');
+      
+      // Wrong answers sheet with all options displayed
+      if (allWrongAnswers.length > 0) {
+        const wrongAnswersData = [
+          ['Câu trả lời sai chi tiết', '', '', '', '', '', '', '', ''],
+          ['STT', 'Chuyên đề', 'Loại', 'Câu hỏi', 'Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D', 'Đáp án của bạn', 'Đáp án đúng', 'Giải thích', 'Thời gian']
+        ];
+        
+        allWrongAnswers.forEach((answer, index) => {
+          // Map option labels to their text values
+          const optionsMap = {};
+          (answer.optionLabels || []).forEach((label, i) => {
+            optionsMap[label] = answer.options[i] || '';
+          });
+          
+          wrongAnswersData.push([
+            index + 1,
+            answer.topicName,
+            answer.isExam ? 'Bài thi' : 'Chuyên đề',
+            answer.question,
+            optionsMap['A'] || '',
+            optionsMap['B'] || '',
+            optionsMap['C'] || '',
+            optionsMap['D'] || '',
+            answer.userAnswer,
+            answer.correctAnswer,
+            answer.explanation || '',
+            new Date(answer.timestamp).toLocaleString('vi-VN')
+          ]);
+        });
+        
+        const ws3 = XLSX.utils.aoa_to_sheet(wrongAnswersData);
+        ws3['!cols'] = [
+          { width: 6 },   // STT
+          { width: 25 },  // Chuyên đề
+          { width: 12 },  // Loại
+          { width: 60 },  // Câu hỏi
+          { width: 30 },  // Đáp án A
+          { width: 30 },  // Đáp án B
+          { width: 30 },  // Đáp án C
+          { width: 30 },  // Đáp án D
+          { width: 15 },  // Đáp án của bạn
+          { width: 15 },  // Đáp án đúng
+          { width: 40 },  // Giải thích
+          { width: 20 }   // Thời gian
+        ];
+        XLSX.utils.book_append_sheet(wb, ws3, 'Câu sai');
+      }
+      
+      // Save file
+      const fileName = `thong-ke-tong-quat-${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    };
+
+    // Export statistics for a specific topic
+    window.exportTopicStatisticsExcel = function(topicId) {
+      const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
+      const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
+      const allTopics = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
+      
+      // Lọc dữ liệu theo topicId
+      const topicStats = allStats.filter(stat => stat.topicId === topicId);
+      const topicWrongAnswers = allWrongAnswers.filter(answer => answer.topicId === topicId);
+      const topic = allTopics.find(t => t.id === topicId);
+      
+      if (topicStats.length === 0) {
+        alert('Chưa có dữ liệu thống kê cho chuyên đề này!');
+        return;
+      }
+      
+      const topicName = topic ? topic.name : (topicStats[0] ? topicStats[0].topicName : 'Unknown');
+      
+      // Tính toán thống kê
+      const totalAttempts = topicStats.length;
+      const avgScore = Math.round(topicStats.reduce((sum, s) => sum + s.score, 0) / totalAttempts);
+      const bestScore = Math.max(...topicStats.map(s => s.score));
+      const totalCorrect = topicStats.reduce((sum, s) => sum + s.correctAnswers, 0);
+      const totalWrong = topicStats.reduce((sum, s) => sum + s.wrongAnswers, 0);
+      
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Summary sheet
+      const summaryData = [
+        ['Thống kê chuyên đề: ' + topicName, ''],
+        ['Tổng số lần làm bài', totalAttempts],
+        ['Điểm trung bình', avgScore + '%'],
+        ['Điểm cao nhất', bestScore + '%'],
+        ['Tổng số câu đúng', totalCorrect],
+        ['Tổng số câu sai', totalWrong],
+        ['', ''],
+        ['Chi tiết từng lần làm bài', ''],
+        ['Thời gian', 'Tổng câu', 'Đúng', 'Sai', 'Điểm']
+      ];
+      
+      topicStats.forEach(stat => {
+        summaryData.push([
+          new Date(stat.timestamp).toLocaleString('vi-VN'),
+          stat.totalQuestions,
+          stat.correctAnswers,
+          stat.wrongAnswers,
+          stat.score + '%'
+        ]);
+      });
+      
+      const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+      ws1['!cols'] = [
+        { width: 20 },
+        { width: 15 },
+        { width: 10 },
+        { width: 10 },
+        { width: 10 }
+      ];
+      XLSX.utils.book_append_sheet(wb, ws1, 'Tổng quan');
+      
+      // Câu hỏi từ chuyên đề (nếu có)
+      if (topic && topic.questions && topic.questions.length > 0) {
+        const questionsData = [
+          ['Danh sách câu hỏi - ' + topicName, '', '', '', '', '', ''],
+          ['STT', 'Câu hỏi', 'Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D', 'Đáp án đúng', 'Giải thích']
+        ];
+        
+        topic.questions.forEach((q, index) => {
+          const optionsMap = {};
+          (q.optionLabels || []).forEach((label, i) => {
+            optionsMap[label] = q.options[i] || '';
+          });
+          
+          questionsData.push([
+            index + 1,
+            q.question || '',
+            optionsMap['A'] || '',
+            optionsMap['B'] || '',
+            optionsMap['C'] || '',
+            optionsMap['D'] || '',
+            q.answer || '',
+            q.explain || ''
+          ]);
+        });
+        
+        const ws2 = XLSX.utils.aoa_to_sheet(questionsData);
+        ws2['!cols'] = [
+          { width: 6 },
+          { width: 60 },
+          { width: 30 },
+          { width: 30 },
+          { width: 30 },
+          { width: 30 },
+          { width: 12 },
+          { width: 50 }
+        ];
+        XLSX.utils.book_append_sheet(wb, ws2, 'Câu hỏi');
+      }
+      
+      // Wrong answers sheet
+      if (topicWrongAnswers.length > 0) {
+        const wrongAnswersData = [
+          ['Câu trả lời sai - ' + topicName, '', '', '', '', '', '', ''],
+          ['STT', 'Câu hỏi', 'Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D', 'Đáp án của bạn', 'Đáp án đúng', 'Giải thích', 'Thời gian']
+        ];
+        
+        topicWrongAnswers.forEach((answer, index) => {
+          const optionsMap = {};
+          (answer.optionLabels || []).forEach((label, i) => {
+            optionsMap[label] = answer.options[i] || '';
+          });
+          
+          wrongAnswersData.push([
+            index + 1,
+            answer.question,
+            optionsMap['A'] || '',
+            optionsMap['B'] || '',
+            optionsMap['C'] || '',
+            optionsMap['D'] || '',
+            answer.userAnswer,
+            answer.correctAnswer,
+            answer.explanation || '',
+            new Date(answer.timestamp).toLocaleString('vi-VN')
+          ]);
+        });
+        
+        const ws3 = XLSX.utils.aoa_to_sheet(wrongAnswersData);
+        ws3['!cols'] = [
+          { width: 6 },
+          { width: 60 },
+          { width: 30 },
+          { width: 30 },
+          { width: 30 },
+          { width: 30 },
+          { width: 15 },
+          { width: 15 },
+          { width: 40 },
+          { width: 20 }
+        ];
+        XLSX.utils.book_append_sheet(wb, ws3, 'Câu sai');
+      }
+      
+      // Save file
+      const fileName = `thong-ke-${topicName.replace(/[^a-zA-Z0-9]/g, '-')}-${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    };
+
+    window.exportGlobalStatistics = function() {
+        const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
+        const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
+        
+        if (allStats.length === 0) {
+          alert('Không có dữ liệu thống kê nào để xuất!');
+          return;
+        }
+        
+        // Calculate overall statistics
+        const totalAttempts = allStats.length;
+        const avgScore = Math.round(allStats.reduce((sum, s) => sum + s.score, 0) / totalAttempts);
+        const bestScore = Math.max(...allStats.map(s => s.score));
+        const totalQuestions = allStats.reduce((sum, s) => sum + s.totalQuestions, 0);
+        const totalCorrect = allStats.reduce((sum, s) => sum + s.correctAnswers, 0);
+        const totalWrong = allStats.reduce((sum, s) => sum + s.wrongAnswers, 0);
+        
+        // Group by topic
+        const topicStats = {};
+        allStats.forEach(stat => {
+          if (!topicStats[stat.topicId]) {
+            topicStats[stat.topicId] = {
+              name: stat.topicName,
+              attempts: 0,
+              totalScore: 0,
+              bestScore: 0,
+              totalQuestions: 0,
+              totalCorrect: 0,
+              totalWrong: 0,
+              isExam: stat.isExam
+            };
+          }
+          topicStats[stat.topicId].attempts++;
+          topicStats[stat.topicId].totalScore += stat.score;
+          topicStats[stat.topicId].bestScore = Math.max(topicStats[stat.topicId].bestScore, stat.score);
+          topicStats[stat.topicId].totalQuestions += stat.totalQuestions;
+          topicStats[stat.topicId].totalCorrect += stat.correctAnswers;
+          topicStats[stat.topicId].totalWrong += stat.wrongAnswers;
+        });
+        
+        // Calculate averages for each topic
+        Object.values(topicStats).forEach(topic => {
+          topic.avgScore = Math.round(topic.totalScore / topic.attempts);
+        });
+        
+        // Sort topics by average score (descending)
+        const sortedTopics = Object.values(topicStats).sort((a, b) => b.avgScore - a.avgScore);
+        
+        // Create CSV content
+        let csvContent = 'Thống kê tổng quát - Hệ thống ôn luyện trắc nghiệm Cần Thơ II\n\n';
+        csvContent += 'Tổng số lần làm bài,' + totalAttempts + '\n';
+        csvContent += 'Điểm trung bình,' + avgScore + '%\n';
+        csvContent += 'Điểm cao nhất,' + bestScore + '%\n';
+        csvContent += 'Tổng số câu hỏi,' + totalQuestions + '\n';
+        csvContent += 'Tổng số câu đúng,' + totalCorrect + '\n';
+        csvContent += 'Tổng số câu sai,' + totalWrong + '\n\n';
+        
+        csvContent += 'Thống kê theo chuyên đề:\n';
+        csvContent += 'STT,Tên chuyên đề,Loại,Lần làm,Điểm TB,Điểm cao nhất,Tổng câu,Đúng,Sai\n';
+        sortedTopics.forEach((topic, index) => {
+          csvContent += (index + 1) + ',"' + 
+                       topic.name.replace(/"/g, '""') + '","' + 
+                       (topic.isExam ? 'Bài thi' : 'Chuyên đề') + '",' + 
+                       topic.attempts + ',' + 
+                       topic.avgScore + '%,' + 
+                       topic.bestScore + '%,' + 
+                       topic.totalQuestions + ',' + 
+                       topic.totalCorrect + ',' + 
+                       topic.totalWrong + '\n';
+        });
+        
+        csvContent += '\nChi tiết từng lần làm bài:\n';
+        csvContent += 'Thời gian,Tên chuyên đề,Loại,Tổng câu,Đúng,Sai,Điểm\n';
+        allStats.forEach(stat => {
+          csvContent += new Date(stat.timestamp).toLocaleString('vi-VN') + ',"' + 
+                       stat.topicName.replace(/"/g, '""') + '","' + 
+                       (stat.isExam ? 'Bài thi' : 'Chuyên đề') + '",' + 
+                       stat.totalQuestions + ',' + 
+                       stat.correctAnswers + ',' + 
+                       stat.wrongAnswers + ',' + 
+                       stat.score + '%\n';
+        });
+        
+        // Download file
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `thong-ke-tong-quat-${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
+    </script>
+
+  </div>
+  
+  <footer class="footer-copyright" style="text-align: center; padding: 20px; margin-top: 40px; background: #f8f6f8; border-top: 1px solid #eee; color: #800020;">
+    <strong>Bản quyền © 2025 Hệ thống ôn luyện trắc nghiệm Cần Thơ II.</strong><br>  
+    Liên hệ: Nguyễn Thành Trung
+    📱 Cellphone: 0947.86.86.82
+    📧 Email: trungnguyenthanh1@agribank.com.vn
+  </footer>
+  
+  <script src="mobile-touch.js"></script>
+  
+  <script>
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('Service Worker registered'))
+          .catch(err => console.log('Service Worker registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>

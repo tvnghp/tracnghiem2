@@ -1,0 +1,903 @@
+/* Mobile Enhancements for Quiz App */
+/* Optimized for touch devices and small screens */
+
+/* iPhone specific optimizations */
+@supports (-webkit-touch-callout: none) {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+  }
+  
+  body {
+    -webkit-overflow-scrolling: touch;
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+  }
+  
+  input, select, textarea, button {
+    -webkit-appearance: none;
+    border-radius: 0;
+  }
+  
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* Android specific optimizations */
+@supports not (-webkit-touch-callout: none) {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  
+  body {
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+  }
+  
+  input, select, textarea, button {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    border-radius: 8px;
+  }
+  
+  button {
+    -webkit-tap-highlight-color: transparent;
+    -moz-tap-highlight-color: transparent;
+    tap-highlight-color: transparent;
+  }
+  
+  /* Android Chrome specific optimizations */
+  .container {
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+  }
+  
+  /* Better touch targets for Android */
+  .btn, .answer, .topic-card {
+    min-height: 48px;
+    min-width: 48px;
+  }
+  
+  /* Android WebView optimizations */
+  input:focus, select:focus, textarea:focus {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    user-select: text;
+  }
+}
+
+/* Mobile-first approach */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+input, textarea, select {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* Enhanced mobile containers */
+@media (max-width: 768px) {
+  .container {
+    margin: 0 !important;
+    border-radius: 0 !important;
+    padding: 16px !important;
+    max-width: 100% !important;
+    min-height: 100vh;
+    box-shadow: none !important;
+    border-top: 6px solid var(--primary-color) !important;
+  }
+
+  /* Mobile typography improvements */
+  h1 {
+    font-size: 1.6rem !important;
+    line-height: 1.3 !important;
+    margin-bottom: 20px !important;
+    text-align: center !important;
+  }
+
+  h2 {
+    font-size: 1.4rem !important;
+    line-height: 1.3 !important;
+    margin-bottom: 16px !important;
+  }
+
+  h3 {
+    font-size: 1.2rem !important;
+    line-height: 1.3 !important;
+    margin-bottom: 12px !important;
+  }
+
+  /* Enhanced mobile buttons */
+  .btn {
+    min-height: 48px !important;
+    font-size: 16px !important;
+    padding: 14px 24px !important;
+    border-radius: 12px !important;
+    touch-action: manipulation;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: all 0.2s ease;
+    /* Android specific optimizations */
+    -webkit-tap-highlight-color: transparent;
+    -moz-tap-highlight-color: transparent;
+    tap-highlight-color: transparent;
+  }
+
+  .btn:hover, .btn:active {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+
+  .btn-outline {
+    min-height: 48px !important;
+    border-width: 2px !important;
+  }
+
+  /* Mobile form elements */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  select,
+  textarea {
+    min-height: 48px !important;
+    font-size: 16px !important;
+    padding: 12px 16px !important;
+    border-radius: 12px !important;
+    border-width: 2px !important;
+    transition: all 0.2s ease;
+    /* Android specific optimizations */
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    -webkit-tap-highlight-color: transparent;
+    -moz-tap-highlight-color: transparent;
+    tap-highlight-color: transparent;
+  }
+
+  input:focus,
+  select:focus,
+  textarea:focus {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(128, 0, 32, 0.2);
+  }
+
+  /* Enhanced mobile quiz interface */
+  .question {
+    font-size: 1.2rem !important;
+    line-height: 1.4 !important;
+    margin-bottom: 24px !important;
+    padding: 20px !important;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+    border-radius: 16px !important;
+    border-left: 4px solid var(--primary-color) !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+
+  /* Enhanced mobile answer options */
+  .answer {
+    padding: 18px 20px !important;
+    margin-bottom: 12px !important;
+    border-radius: 16px !important;
+    min-height: 60px !important;
+    font-size: 16px !important;
+    line-height: 1.4 !important;
+    border-width: 2px !important;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .answer:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+
+  .answer.selected {
+    background: rgba(128, 0, 32, 0.1) !important;
+    border-color: var(--primary-color) !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(128, 0, 32, 0.2);
+  }
+
+  .answer .option {
+    min-width: 36px !important;
+    height: 36px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-weight: 700 !important;
+    font-size: 16px !important;
+    background: var(--primary-color);
+    color: white;
+    flex-shrink: 0;
+  }
+
+  .answer .text {
+    flex: 1;
+    font-weight: 500;
+  }
+
+  /* Enhanced mobile progress bar */
+  .quiz-progress {
+    height: 10px !important;
+    margin: 24px 0 !important;
+    border-radius: 8px !important;
+    background: #e9ecef !important;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+  }
+
+  #progress-bar {
+    border-radius: 8px !important;
+    background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-light) 100%) !important;
+    box-shadow: 0 2px 4px rgba(128, 0, 32, 0.3);
+  }
+
+  /* Enhanced mobile controls */
+  .quiz-controls {
+    flex-direction: column !important;
+    gap: 20px !important;
+    margin: 32px 0 !important;
+    padding: 20px 0 !important;
+    border-top: 2px solid #e9ecef !important;
+    border-bottom: 2px solid #e9ecef !important;
+  }
+
+  .quiz-actions {
+    width: 100% !important;
+    justify-content: space-between !important;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .btn-flag {
+    min-height: 48px !important;
+    padding: 12px 20px !important;
+    border-radius: 12px !important;
+    font-size: 16px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: auto !important;
+    height: auto !important;
+  }
+
+  /* Enhanced mobile topic cards */
+  .topics-grid {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+    margin: 24px 0 !important;
+  }
+
+  .topic-card {
+    margin-bottom: 0 !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1) !important;
+    transition: all 0.3s ease;
+  }
+
+  .topic-card:hover {
+    transform: translateY(-4px) !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15) !important;
+  }
+
+  .topic-card-content {
+    padding: 24px !important;
+    text-align: center;
+  }
+
+  .topic-card h3 {
+    font-size: 1.3rem !important;
+    margin-bottom: 12px !important;
+    color: var(--primary-color) !important;
+  }
+
+  .topic-card p {
+    font-size: 16px !important;
+    margin-bottom: 20px !important;
+    color: #666 !important;
+  }
+
+  .topic-card .btn {
+    width: 100% !important;
+    justify-content: center !important;
+    margin-top: 8px;
+  }
+
+  /* Enhanced mobile admin panel */
+  .admin-actions {
+    flex-direction: column !important;
+    gap: 16px !important;
+    padding: 20px !important;
+    background: #f8f9fa !important;
+    border-radius: 16px !important;
+    margin-top: 24px !important;
+  }
+
+  .admin-actions .btn {
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: 52px !important;
+    font-size: 16px !important;
+  }
+
+  /* Enhanced mobile forms */
+  .form-group {
+    margin-bottom: 20px !important;
+  }
+
+  .form-group label {
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    margin-bottom: 8px !important;
+    color: var(--primary-color) !important;
+  }
+
+  /* Enhanced mobile dropdowns */
+  select {
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 12px center !important;
+    background-size: 20px !important;
+    padding-right: 40px !important;
+  }
+
+  /* Enhanced mobile footer */
+  .footer-copyright {
+    padding: 24px 16px !important;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+    background: #f8f9fa !important;
+    border-top: 2px solid #e9ecef !important;
+    margin-top: 40px !important;
+  }
+
+  /* Enhanced mobile logo */
+  .logo {
+    margin-bottom: 24px !important;
+    padding: 16px 0 !important;
+    border-bottom: 2px solid #e9ecef;
+  }
+
+  .logo img {
+    height: 60px !important;
+    margin-right: 16px !important;
+  }
+
+  /* Enhanced mobile welcome section */
+  .welcome-section {
+    text-align: center;
+    padding: 24px 0;
+    margin-bottom: 32px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 16px;
+    border: 2px solid #e9ecef;
+  }
+
+  .welcome-section h2 {
+    color: var(--primary-color) !important;
+    margin-bottom: 12px !important;
+    font-size: 1.4rem !important;
+  }
+
+  .welcome-section p {
+    color: #666 !important;
+    font-size: 16px !important;
+    margin: 0 !important;
+  }
+
+  /* Enhanced mobile admin section */
+  .admin-section {
+    margin-top: 32px !important;
+    text-align: center !important;
+    padding: 24px 0 !important;
+    border-top: 2px solid #e9ecef !important;
+  }
+
+  /* Enhanced mobile empty states */
+  .empty-state {
+    text-align: center !important;
+    padding: 40px 20px !important;
+    color: #666 !important;
+  }
+
+  .empty-state .material-icons {
+    font-size: 4rem !important;
+    color: #ddd !important;
+    margin-bottom: 16px !important;
+    display: block !important;
+  }
+
+  .empty-state p {
+    font-size: 16px !important;
+    margin: 0 !important;
+  }
+
+  /* Enhanced mobile modals */
+  .modal .modal-content {
+    width: 95vw !important;
+    max-width: 500px !important;
+    max-height: 90vh !important;
+    border-radius: 16px !important;
+    padding: 24px !important;
+    margin: 20px !important;
+  }
+
+  .modal .modal-actions {
+    flex-direction: column !important;
+    gap: 12px !important;
+    margin-top: 24px !important;
+  }
+
+  .modal .modal-actions .btn {
+    width: 100% !important;
+  }
+
+  /* Enhanced mobile topic items */
+  .topic-item {
+    padding: 20px !important;
+    margin-bottom: 16px !important;
+    border-radius: 16px !important;
+    background: white !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+    border: 2px solid #f1f3f4 !important;
+  }
+
+  .topic-info h3 {
+    font-size: 1.2rem !important;
+    margin-bottom: 8px !important;
+    color: var(--primary-color) !important;
+  }
+
+  .topic-meta {
+    font-size: 14px !important;
+    color: #666 !important;
+    margin-bottom: 16px !important;
+  }
+
+  /* Enhanced mobile file upload */
+  .file-upload input[type="file"] {
+    padding: 12px !important;
+    border: 2px dashed #ccc !important;
+    border-radius: 12px !important;
+    background: #f8f9fa !important;
+    font-size: 16px !important;
+    width: 100% !important;
+  }
+
+  .file-upload input[type="file"]:focus {
+    border-color: var(--primary-color) !important;
+    background: rgba(128, 0, 32, 0.05) !important;
+  }
+
+  /* Enhanced mobile success/error messages */
+  .success {
+    background: #d4edda !important;
+    color: #155724 !important;
+    padding: 12px 16px !important;
+    border-radius: 12px !important;
+    border: 1px solid #c3e6cb !important;
+    font-size: 16px !important;
+  }
+
+  .error {
+    background: #f8d7da !important;
+    color: #721c24 !important;
+    padding: 12px 16px !important;
+    border-radius: 12px !important;
+    border: 1px solid #f5c6cb !important;
+    font-size: 16px !important;
+  }
+
+  /* Enhanced mobile question counter */
+  #question-counter {
+    text-align: center !important;
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    color: var(--primary-color) !important;
+    margin: 20px 0 !important;
+    padding: 12px 20px !important;
+    background: rgba(128, 0, 32, 0.1) !important;
+    border-radius: 12px !important;
+    border: 2px solid rgba(128, 0, 32, 0.2) !important;
+  }
+
+  /* Enhanced mobile timer */
+  .timer {
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    padding: 8px 16px !important;
+    border-radius: 12px !important;
+    background: #f8f9fa !important;
+    border: 2px solid #e9ecef !important;
+  }
+
+  .timer.warning {
+    background: #fff3cd !important;
+    color: #856404 !important;
+    border-color: #ffeaa7 !important;
+  }
+
+  .timer.danger {
+    background: #f8d7da !important;
+    color: #721c24 !important;
+    border-color: #f5c6cb !important;
+    animation: timerPulse 1s ease-in-out infinite !important;
+  }
+
+  /* Enhanced mobile back link */
+  .back-link {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    color: var(--primary-color) !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+    margin-bottom: 20px !important;
+    padding: 12px 16px !important;
+    background: rgba(128, 0, 32, 0.1) !important;
+    border-radius: 12px !important;
+    transition: all 0.2s ease;
+  }
+
+  .back-link:hover {
+    background: rgba(128, 0, 32, 0.2) !important;
+    transform: translateX(-4px);
+  }
+
+  /* Enhanced mobile material icons */
+  .material-icons {
+    font-size: 20px !important;
+    vertical-align: middle;
+  }
+
+  /* Enhanced mobile grid layouts */
+  .content {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 24px !important;
+  }
+
+  /* Enhanced mobile section spacing */
+  section {
+    margin-bottom: 32px !important;
+  }
+
+  section:last-child {
+    margin-bottom: 0 !important;
+  }
+
+  /* Enhanced mobile header spacing */
+  header {
+    margin-bottom: 24px !important;
+    padding-bottom: 20px !important;
+    border-bottom: 2px solid #e9ecef !important;
+  }
+
+  /* Enhanced mobile utility classes */
+  .mt-4 {
+    margin-top: 24px !important;
+  }
+
+  .mb-4 {
+    margin-bottom: 24px !important;
+  }
+
+  .text-center {
+    text-align: center !important;
+  }
+
+  /* Enhanced mobile animations */
+  @keyframes fadeIn {
+    from { 
+      opacity: 0; 
+      transform: translateY(20px);
+    }
+    to { 
+      opacity: 1; 
+      transform: translateY(0);
+    }
+  }
+
+  .topic-card,
+  .answer,
+  .btn,
+  .modal .modal-content {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  /* Enhanced mobile scroll behavior */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Enhanced mobile focus states */
+  .btn:focus,
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: 3px solid rgba(128, 0, 32, 0.3) !important;
+    outline-offset: 2px !important;
+  }
+
+  /* Enhanced mobile touch feedback */
+  .btn:active,
+  .answer:active {
+    transform: scale(0.98);
+  }
+}
+
+/* Extra small devices (phones in portrait) */
+@media (max-width: 480px) {
+  .container {
+    padding: 12px !important;
+  }
+
+  h1 {
+    font-size: 1.4rem !important;
+  }
+
+  h2 {
+    font-size: 1.3rem !important;
+  }
+
+  h3 {
+    font-size: 1.1rem !important;
+  }
+
+  .btn {
+    padding: 12px 20px !important;
+    font-size: 15px !important;
+  }
+
+  .question {
+    font-size: 1.1rem !important;
+    padding: 16px !important;
+  }
+
+  .answer {
+    padding: 16px !important;
+    font-size: 15px !important;
+  }
+
+  .topic-card-content {
+    padding: 20px !important;
+  }
+
+  .modal .modal-content {
+    width: 98vw !important;
+    margin: 10px !important;
+    padding: 20px !important;
+  }
+}
+
+/* Landscape orientation adjustments */
+@media (max-width: 768px) and (orientation: landscape) {
+  .container {
+    padding: 12px !important;
+  }
+
+  .welcome-section {
+    padding: 16px 0 !important;
+    margin-bottom: 20px !important;
+  }
+
+  .quiz-controls {
+    margin: 20px 0 !important;
+    padding: 16px 0 !important;
+  }
+
+  .admin-actions {
+    padding: 16px !important;
+  }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .material-icons {
+    font-size: 22px !important;
+  }
+}
+
+/* Performance optimizations for mobile */
+@media (max-width: 768px) {
+  * {
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-perspective: 1000;
+    perspective: 1000;
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+  }
+  
+  /* Optimize animations for mobile */
+  .btn,
+  .answer,
+  .topic-card,
+  .modal-content {
+    will-change: transform;
+  }
+  
+  /* Reduce motion for users who prefer it */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+  
+  
+  /* Safe area support for notched devices */
+  .container {
+    padding-left: max(16px, env(safe-area-inset-left)) !important;
+    padding-right: max(16px, env(safe-area-inset-right)) !important;
+    padding-top: max(16px, env(safe-area-inset-top)) !important;
+    padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;
+  }
+  
+  /* Optimize for landscape orientation */
+  @media (max-width: 768px) and (orientation: landscape) {
+    .container {
+      padding: 8px !important;
+    }
+    
+    .welcome-section {
+      padding: 12px 0 !important;
+      margin-bottom: 16px !important;
+    }
+    
+    .quiz-controls {
+      margin: 16px 0 !important;
+      padding: 12px 0 !important;
+    }
+    
+    .admin-actions {
+      padding: 12px !important;
+    }
+    
+    .modal .modal-content {
+      max-height: 80vh !important;
+      overflow-y: auto !important;
+    }
+  }
+  
+  /* Battery saving mode optimizations */
+  @media (prefers-reduced-motion: no-preference) {
+    .btn:hover {
+      transform: translateY(-2px) !important;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    }
+    
+    .answer:hover {
+      transform: translateY(-1px) !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+    }
+    
+    .topic-card:hover {
+      transform: translateY(-4px) !important;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15) !important;
+    }
+  }
+}
+
+/* Android specific optimizations */
+@supports not (-webkit-touch-callout: none) {
+  /* Android Chrome and WebView optimizations */
+  .container {
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+  
+  /* Better scrolling on Android */
+  body {
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+  }
+  
+  /* Android touch feedback */
+  .btn:active,
+  .answer:active,
+  .topic-card:active {
+    background-color: rgba(128, 0, 32, 0.1);
+    transform: scale(0.98);
+    transition: all 0.1s ease;
+  }
+  
+  /* Android form optimizations */
+  input:focus,
+  select:focus,
+  textarea:focus {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    user-select: text;
+    background-color: rgba(128, 0, 32, 0.05);
+  }
+  
+  /* Android keyboard handling */
+  @media (max-width: 768px) {
+    .container {
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+    }
+    
+    /* Prevent zoom on input focus for Android */
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+  
+  /* Android Chrome address bar handling */
+  @media (max-height: 500px) and (orientation: landscape) {
+    .container {
+      padding: 8px !important;
+    }
+    
+    .welcome-section {
+      padding: 8px 0 !important;
+      margin-bottom: 8px !important;
+    }
+    
+    .quiz-controls {
+      margin: 8px 0 !important;
+      padding: 8px 0 !important;
+    }
+  }
+  
+  /* Android performance optimizations */
+  .btn,
+  .answer,
+  .topic-card,
+  .modal-content {
+    will-change: transform;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-perspective: 1000;
+    perspective: 1000;
+  }
+  
+  /* Android specific animations */
+  @media (prefers-reduced-motion: no-preference) {
+    .btn:hover {
+      transform: translateY(-2px) scale(1.02);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+    }
+    
+    .answer:hover {
+      transform: translateY(-1px) scale(1.01);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .topic-card:hover {
+      transform: translateY(-4px) scale(1.02);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.15);
+    }
+  }
+}

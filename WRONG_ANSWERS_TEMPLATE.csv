@@ -1,0 +1,6 @@
+Timestamp,User ID,Topic ID,Topic Name,Question,Option A,Option B,Option C,Option D,User Answer,Correct Answer,Explanation
+2025-01-10 10:30:00,user_1234567890,topic_1,Tin dụng,Lãi suất cơ bản của Ngân hàng Nhà nước Việt Nam hiện tại là bao nhiêu?,3.5%,4.0%,4.5%,5.0%,B,A,Lãi suất cơ bản hiện tại là 4.0% theo quy định của NHNN
+2025-01-10 10:30:00,user_1234567890,topic_1,Tin dụng,Thời hạn tối đa của khoản vay tiêu dùng là bao nhiêu năm?,5 năm,7 năm,10 năm,15 năm,C,B,Thời hạn tối đa của khoản vay tiêu dùng là 7 năm
+2025-01-10 11:15:00,user_0987654321,topic_2,Tín dụng,Tỷ lệ dự phòng rủi ro tín dụng tối thiểu là bao nhiêu %?,0.5%,1.0%,1.5%,2.0%,A,B,Tỷ lệ dự phòng rủi ro tín dụng tối thiểu là 1.0%
+2025-01-10 11:15:00,user_0987654321,topic_2,Tín dụng,Thời hạn đánh giá lại rủi ro tín dụng là bao lâu?,3 tháng,6 tháng,12 tháng,24 tháng,A,B,Thời hạn đánh giá lại rủi ro tín dụng là 6 tháng
+2025-01-10 11:15:00,user_0987654321,topic_2,Tín dụng,Mức lãi suất cho vay tối đa không được vượt quá bao nhiêu lần lãi suất cơ bản?,1.5 lần,2.0 lần,2.5 lần,3.0 lần,C,B,Mức lãi suất cho vay tối đa không được vượt quá 2.0 lần lãi suất cơ bản

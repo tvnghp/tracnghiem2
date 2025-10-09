@@ -1,0 +1,40 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="vn.agribank.cantho2.quiz" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>Quiz Cần Thơ II</name>
+    <description>
+        Hệ thống ôn luyện trắc nghiệm Chi nhánh Cần Thơ II
+    </description>
+    <author email="trungnguyenthanh1@agribank.com.vn" href="">
+        Nguyễn Thành Trung
+    </author>
+    <content src="index.html" />
+    <access origin="*" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+    <allow-intent href="tel:*" />
+    <allow-intent href="sms:*" />
+    <allow-intent href="mailto:*" />
+    <allow-intent href="geo:*" />
+    
+    <platform name="android">
+        <allow-intent href="market:*" />
+        <icon density="ldpi" src="res/icon/android/ldpi.png" />
+        <icon density="mdpi" src="res/icon/android/mdpi.png" />
+        <icon density="hdpi" src="res/icon/android/hdpi.png" />
+        <icon density="xhdpi" src="res/icon/android/xhdpi.png" />
+        <icon density="xxhdpi" src="res/icon/android/xxhdpi.png" />
+        <icon density="xxxhdpi" src="res/icon/android/xxxhdpi.png" />
+        
+        <preference name="AndroidWindowSplashScreenAnimatedIcon" value="res/screen/android/splash.png" />
+        <preference name="AndroidWindowSplashScreenBackground" value="#800020" />
+    </platform>
+    
+    <preference name="DisallowOverscroll" value="true" />
+    <preference name="android-minSdkVersion" value="24" />
+    <preference name="android-targetSdkVersion" value="33" />
+    <preference name="Orientation" value="default" />
+    <preference name="Fullscreen" value="false" />
+    <preference name="StatusBarOverlaysWebView" value="false" />
+    <preference name="StatusBarBackgroundColor" value="#800020" />
+    <preference name="StatusBarStyle" value="lightcontent" />
+</widget>
