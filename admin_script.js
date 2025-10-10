@@ -369,7 +369,7 @@ function renderEditExamTopics(allTopics, exam) {
   const holder = document.getElementById('edit-exam-topic-percents');
   if (!holder) return;
   if (!allTopics || allTopics.length === 0) {
-    holder.innerHTML = '<p>Chưa có chuyên đề để chọn.</p>';
+    holder.innerHTML = '<div style="text-align: center; padding: 20px; color: #6c757d;"><i class="material-icons" style="font-size: 2rem; margin-bottom: 8px; display: block;">folder_open</i>Chưa có chuyên đề để chọn.</div>';
     return;
   }
   
@@ -377,32 +377,106 @@ function renderEditExamTopics(allTopics, exam) {
   (exam.examConfig?.distribution || []).forEach(d => distMap[d.id] = d.percent);
   
   holder.innerHTML = allTopics.map(t => `
-    <div class="topic-item" style="align-items:center; gap:12px;">
-      <label style="flex:1; display:flex; align-items:center; gap:8px;">
+    <div class="topic-item">
+      <label>
         <input type="checkbox" class="edit-eb-topic-check" value="${t.id}" ${distMap[t.id] ? 'checked' : ''}>
-        <span>${t.name}</span>
+        <span class="topic-name">${t.name}</span>
+        <span class="topic-count">(${t.questions.length} câu)</span>
       </label>
-      <div style="display:flex; align-items:center; gap:6px;">
-        <input type="number" class="edit-eb-topic-percent" data-id="${t.id}" min="0" max="100" step="1" value="${distMap[t.id] || 0}" style="width:90px;">
-        <span>%</span>
-        <small style="color:#666">(${t.questions.length} câu)</small>
+      <div class="percent-input-container">
+        <input type="number" class="edit-eb-topic-percent" data-id="${t.id}" min="0" max="100" step="1" value="${distMap[t.id] || 0}" ${!distMap[t.id] ? 'disabled' : ''}>
+        <span class="percent-symbol">%</span>
       </div>
     </div>
   `).join('');
 
+  // Add event listeners for percent inputs
   holder.querySelectorAll('.edit-eb-topic-percent').forEach(inp => {
     inp.addEventListener('input', (e) => {
       const id = e.target.getAttribute('data-id');
       const chk = holder.querySelector(`.edit-eb-topic-check[value="${id}"]`);
-      if (chk && parseFloat(e.target.value || '0') > 0) chk.checked = true;
-      normalizePercents(holder);
+      if (chk && parseFloat(e.target.value || '0') > 0) {
+        chk.checked = true;
+        inp.disabled = false;
+      } else if (chk && parseFloat(e.target.value || '0') === 0) {
+        chk.checked = false;
+        inp.disabled = true;
+      }
+      updateEditExamPercentSummary();
     });
-    inp.addEventListener('blur', () => normalizePercents(holder));
+    inp.addEventListener('blur', () => {
+      normalizePercents(holder);
+      updateEditExamPercentSummary();
+    });
   });
   
+  // Add event listeners for checkboxes
   holder.querySelectorAll('.edit-eb-topic-check').forEach(chk => {
-    chk.addEventListener('change', () => normalizePercents(holder));
+    chk.addEventListener('change', (e) => {
+      const id = e.target.value;
+      const percentInput = holder.querySelector(`.edit-eb-topic-percent[data-id="${id}"]`);
+      if (e.target.checked) {
+        percentInput.disabled = false;
+        if (parseFloat(percentInput.value || '0') === 0) {
+          percentInput.value = '0';
+        }
+      } else {
+        percentInput.disabled = true;
+        percentInput.value = '0';
+      }
+      normalizePercents(holder);
+      updateEditExamPercentSummary();
+    });
   });
+  
+  // Add percent summary
+  updateEditExamPercentSummary();
+}
+
+function updateEditExamPercentSummary() {
+  const holder = document.getElementById('edit-exam-topic-percents');
+  if (!holder) return;
+  
+  const inputs = holder.querySelectorAll('.edit-eb-topic-percent:not([disabled])');
+  let total = 0;
+  
+  inputs.forEach(input => {
+    total += parseFloat(input.value || '0');
+  });
+  
+  // Remove existing summary if any
+  const existingSummary = holder.querySelector('.percent-summary');
+  if (existingSummary) {
+    existingSummary.remove();
+  }
+  
+  // Add new summary
+  const summary = document.createElement('div');
+  summary.className = 'percent-summary';
+  summary.style.cssText = `
+    margin-top: 16px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.95rem;
+    ${total === 100 ? 
+      'background: #d4edda; color: #155724; border: 1px solid #c3e6cb;' : 
+      total > 100 ? 
+        'background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;' :
+        'background: #fff3cd; color: #856404; border: 1px solid #ffeaa7;'
+    }
+  `;
+  
+  summary.innerHTML = `
+    <i class="material-icons" style="font-size: 1.2rem; vertical-align: middle; margin-right: 4px;">
+      ${total === 100 ? 'check_circle' : total > 100 ? 'error' : 'warning'}
+    </i>
+    Tổng tỷ lệ: <strong>${total.toFixed(1)}%</strong>
+    ${total === 100 ? ' ✓' : total > 100 ? ' (Vượt quá 100%)' : ` (Còn thiếu ${(100 - total).toFixed(1)}%)`}
+  `;
+  
+  holder.appendChild(summary);
 }
 
 function saveEditExam(e) {
