@@ -310,26 +310,13 @@
           }
         }
 
-        async function clearWebStorage() {
+        function clearWebStorage() {
           try {
             localStorage.clear();
             sessionStorage.clear();
-            
-            // Clear IndexedDB as well
-            try {
-              await indexedDBStorage.clear();
-              console.log('IndexedDB cleared successfully');
-            } catch (dbError) {
-              console.warn('Could not clear IndexedDB:', dbError);
-            }
-            
-            alert('✅ Đã xóa tất cả dữ liệu lưu trữ:\n\n' +
-                  '• localStorage\n' +
-                  '• sessionStorage\n' +
-                  '• IndexedDB\n\n' +
-                  'Dung lượng đã được giải phóng hoàn toàn.');
+            alert('Đã xóa localStorage và sessionStorage.');
           } catch (e) {
-            alert('❌ Không thể xóa web storage: ' + (e && e.message ? e.message : e));
+            alert('Không thể xóa web storage: ' + (e && e.message ? e.message : e));
           }
         }
 
@@ -388,229 +375,17 @@
           }
         }
 
-        // Nén dữ liệu trước khi lưu (đơn giản)
-        function compressData(data) {
+        // Wrapper function để lưu dữ liệu an toàn
+        function safeLocalStorageSet(key, value) {
           try {
-            // Loại bỏ khoảng trắng thừa và nén JSON
-            return JSON.stringify(JSON.parse(JSON.stringify(data)));
-          } catch (e) {
-            return data;
-          }
-        }
-
-        // Giải nén dữ liệu
-        function decompressData(compressedData) {
-          try {
-            return JSON.parse(compressedData);
-          } catch (e) {
-            return compressedData;
-          }
-        }
-
-        // Xóa dữ liệu cũ tự động
-        async function cleanupOldData() {
-          try {
-            const now = Date.now();
-            const maxAge = 30 * 24 * 60 * 60 * 1000; // 30 ngày
-            
-            // Xóa thống kê cũ
-            const stats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
-            const recentStats = stats.filter(stat => {
-              const statTime = new Date(stat.timestamp).getTime();
-              return (now - statTime) < maxAge;
-            });
-            
-            if (recentStats.length < stats.length) {
-              await hybridStorageSet('quiz_statistics', JSON.stringify(recentStats));
-              console.log(`Cleaned up ${stats.length - recentStats.length} old statistics`);
-            }
-            
-            // Xóa câu sai cũ
-            const wrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
-            const recentWrongAnswers = wrongAnswers.filter(answer => {
-              const answerTime = new Date(answer.timestamp).getTime();
-              return (now - answerTime) < maxAge;
-            });
-            
-            if (recentWrongAnswers.length < wrongAnswers.length) {
-              await hybridStorageSet('wrong_answers', JSON.stringify(recentWrongAnswers));
-              console.log(`Cleaned up ${wrongAnswers.length - recentWrongAnswers.length} old wrong answers`);
-            }
-            
-            return {
-              statsRemoved: stats.length - recentStats.length,
-              wrongAnswersRemoved: wrongAnswers.length - recentWrongAnswers.length
-            };
-          } catch (e) {
-            console.error('Error cleaning up old data:', e);
-            return null;
-          }
-        }
-
-        // Wrapper function để lưu dữ liệu an toàn với tối ưu hóa
-        async function safeLocalStorageSet(key, value, options = {}) {
-          try {
-            let dataToStore = value;
-            
-            // Nén dữ liệu nếu được yêu cầu
-            if (options.compress !== false) {
-              dataToStore = compressData(value);
-            }
-            
-            await hybridStorageSet(key, dataToStore);
+            localStorage.setItem(key, value);
             return true;
           } catch (error) {
             if (error.name === 'QuotaExceededError') {
-              // Thử dọn dẹp dữ liệu cũ trước
-              const cleanupResult = cleanupOldData();
-              if (cleanupResult) {
-                console.log('Cleaned up old data, retrying save...');
-                try {
-                  await hybridStorageSet(key, dataToStore);
-                  return true;
-                } catch (retryError) {
-                  handleQuotaExceededError(retryError, `saving ${key} after cleanup`);
-                  return false;
-                }
-              } else {
-                handleQuotaExceededError(error, `saving ${key}`);
-                return false;
-              }
+              handleQuotaExceededError(error, `saving ${key}`);
+              return false;
             }
             throw error;
-          }
-        }
-
-        // Lưu dữ liệu với tối ưu hóa
-        async function optimizedLocalStorageSet(key, value) {
-          return await safeLocalStorageSet(key, value, { compress: true });
-        }
-
-        // IndexedDB để lưu trữ dữ liệu lớn
-        class IndexedDBStorage {
-          constructor() {
-            this.dbName = 'QuizStorageDB';
-            this.version = 1;
-            this.db = null;
-          }
-
-          async init() {
-            return new Promise((resolve, reject) => {
-              const request = indexedDB.open(this.dbName, this.version);
-              
-              request.onerror = () => reject(request.error);
-              request.onsuccess = () => {
-                this.db = request.result;
-                resolve(this.db);
-              };
-              
-              request.onupgradeneeded = (event) => {
-                const db = event.target.result;
-                if (!db.objectStoreNames.contains('quizData')) {
-                  db.createObjectStore('quizData', { keyPath: 'key' });
-                }
-              };
-            });
-          }
-
-          async setItem(key, value) {
-            if (!this.db) await this.init();
-            
-            return new Promise((resolve, reject) => {
-              const transaction = this.db.transaction(['quizData'], 'readwrite');
-              const store = transaction.objectStore('quizData');
-              const request = store.put({ key, value, timestamp: Date.now() });
-              
-              request.onsuccess = () => resolve(true);
-              request.onerror = () => reject(request.error);
-            });
-          }
-
-          async getItem(key) {
-            if (!this.db) await this.init();
-            
-            return new Promise((resolve, reject) => {
-              const transaction = this.db.transaction(['quizData'], 'readonly');
-              const store = transaction.objectStore('quizData');
-              const request = store.get(key);
-              
-              request.onsuccess = () => {
-                resolve(request.result ? request.result.value : null);
-              };
-              request.onerror = () => reject(request.error);
-            });
-          }
-
-          async removeItem(key) {
-            if (!this.db) await this.init();
-            
-            return new Promise((resolve, reject) => {
-              const transaction = this.db.transaction(['quizData'], 'readwrite');
-              const store = transaction.objectStore('quizData');
-              const request = store.delete(key);
-              
-              request.onsuccess = () => resolve(true);
-              request.onerror = () => reject(request.error);
-            });
-          }
-
-          async clear() {
-            if (!this.db) await this.init();
-            
-            return new Promise((resolve, reject) => {
-              const transaction = this.db.transaction(['quizData'], 'readwrite');
-              const store = transaction.objectStore('quizData');
-              const request = store.clear();
-              
-              request.onsuccess = () => resolve(true);
-              request.onerror = () => reject(request.error);
-            });
-          }
-        }
-
-        // Khởi tạo IndexedDB storage
-        const indexedDBStorage = new IndexedDBStorage();
-
-        // Hybrid storage: localStorage + IndexedDB
-        async function hybridStorageSet(key, value) {
-          try {
-            // Thử localStorage trước
-            if (await safeLocalStorageSet(key, value)) {
-              return true;
-            }
-          } catch (e) {
-            console.log('localStorage failed, trying IndexedDB...');
-          }
-          
-          try {
-            // Fallback to IndexedDB
-            await indexedDBStorage.setItem(key, value);
-            console.log(`Data saved to IndexedDB: ${key}`);
-            return true;
-          } catch (e) {
-            console.error('Both localStorage and IndexedDB failed:', e);
-            return false;
-          }
-        }
-
-        async function hybridStorageGet(key) {
-          try {
-            // Thử localStorage trước
-            const localData = localStorage.getItem(key);
-            if (localData) {
-              return localData;
-            }
-          } catch (e) {
-            console.log('localStorage read failed, trying IndexedDB...');
-          }
-          
-          try {
-            // Fallback to IndexedDB
-            const indexedData = await indexedDBStorage.getItem(key);
-            return indexedData;
-          } catch (e) {
-            console.error('Both localStorage and IndexedDB read failed:', e);
-            return null;
           }
         }
 
@@ -619,17 +394,7 @@
         }
 
         if (clearStorageBtn) {
-          clearStorageBtn.addEventListener('click', async function() {
-            if (confirm('⚠️ Bạn có chắc muốn xóa TẤT CẢ dữ liệu lưu trữ?\n\n' +
-                        'Điều này sẽ xóa:\n' +
-                        '• Tất cả chuyên đề đã tải\n' +
-                        '• Tất cả thống kê\n' +
-                        '• Tất cả câu trả lời sai\n' +
-                        '• Tất cả dữ liệu khác\n\n' +
-                        'KHÔNG THỂ HOÀN TÁC!')) {
-              await clearWebStorage();
-            }
-          });
+          clearStorageBtn.addEventListener('click', clearWebStorage);
         }
 
         // Thêm nút kiểm tra dung lượng localStorage
@@ -653,101 +418,6 @@
           }
         });
         document.querySelector('.admin-buttons-grid').appendChild(checkStorageBtn);
-
-        // Thêm nút dọn dẹp dữ liệu cũ
-        const cleanupBtn = document.createElement('button');
-        cleanupBtn.innerHTML = '<i class="material-icons">cleaning_services</i> Dọn dẹp dữ liệu cũ';
-        cleanupBtn.className = 'btn btn-outline admin-btn';
-        cleanupBtn.style.marginTop = '10px';
-        cleanupBtn.addEventListener('click', async function() {
-          if (confirm('Bạn có chắc muốn dọn dẹp dữ liệu cũ hơn 30 ngày?\n\nHành động này sẽ xóa:\n- Thống kê cũ\n- Câu trả lời sai cũ\n\nKhông thể hoàn tác!')) {
-            const result = cleanupOldData();
-            if (result) {
-              alert(`✅ Dọn dẹp hoàn tất!\n\n` +
-                    `Đã xóa:\n` +
-                    `- ${result.statsRemoved} thống kê cũ\n` +
-                    `- ${result.wrongAnswersRemoved} câu trả lời sai cũ\n\n` +
-                    `Dung lượng đã được giải phóng.`);
-            } else {
-              alert('❌ Không thể dọn dẹp dữ liệu cũ.');
-            }
-          }
-        });
-        document.querySelector('.admin-buttons-grid').appendChild(cleanupBtn);
-
-        // Thêm nút export dữ liệu
-        const exportDataBtn = document.createElement('button');
-        exportDataBtn.innerHTML = '<i class="material-icons">file_download</i> Export dữ liệu';
-        exportDataBtn.className = 'btn btn-outline admin-btn';
-        exportDataBtn.style.marginTop = '10px';
-        exportDataBtn.addEventListener('click', function() {
-          try {
-            const allData = {
-              quiz_topics: JSON.parse(localStorage.getItem('quiz_topics') || '[]'),
-              quiz_statistics: JSON.parse(localStorage.getItem('quiz_statistics') || '[]'),
-              wrong_answers: JSON.parse(localStorage.getItem('wrong_answers') || '[]'),
-              exportDate: new Date().toISOString(),
-              version: '1.0'
-            };
-            
-            const dataStr = JSON.stringify(allData, null, 2);
-            const dataBlob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(dataBlob);
-            
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `quiz-backup-${new Date().toISOString().split('T')[0]}.json`;
-            link.click();
-            
-            URL.revokeObjectURL(url);
-            alert('✅ Dữ liệu đã được export thành công!');
-          } catch (e) {
-            alert('❌ Không thể export dữ liệu: ' + e.message);
-          }
-        });
-        document.querySelector('.admin-buttons-grid').appendChild(exportDataBtn);
-
-        // Thêm nút import dữ liệu
-        const importDataBtn = document.createElement('button');
-        importDataBtn.innerHTML = '<i class="material-icons">file_upload</i> Import dữ liệu';
-        importDataBtn.className = 'btn btn-outline admin-btn';
-        importDataBtn.style.marginTop = '10px';
-        importDataBtn.addEventListener('click', function() {
-          const input = document.createElement('input');
-          input.type = 'file';
-          input.accept = '.json';
-          input.onchange = function(e) {
-            const file = e.target.files[0];
-            if (file) {
-              const reader = new FileReader();
-              reader.onload = async function(e) {
-                try {
-                  const data = JSON.parse(e.target.result);
-                  
-                  if (confirm(`Bạn có chắc muốn import dữ liệu?\n\n` +
-                             `Dữ liệu hiện tại sẽ được thay thế bởi:\n` +
-                             `- ${data.quiz_topics?.length || 0} chuyên đề\n` +
-                             `- ${data.quiz_statistics?.length || 0} thống kê\n` +
-                             `- ${data.wrong_answers?.length || 0} câu sai\n\n` +
-                             `Không thể hoàn tác!`)) {
-                    
-                    if (data.quiz_topics) await hybridStorageSet('quiz_topics', JSON.stringify(data.quiz_topics));
-                    if (data.quiz_statistics) await hybridStorageSet('quiz_statistics', JSON.stringify(data.quiz_statistics));
-                    if (data.wrong_answers) await hybridStorageSet('wrong_answers', JSON.stringify(data.wrong_answers));
-                    
-                    alert('✅ Dữ liệu đã được import thành công!\n\nVui lòng tải lại trang để áp dụng thay đổi.');
-                    window.location.reload();
-                  }
-                } catch (e) {
-                  alert('❌ File không hợp lệ: ' + e.message);
-                }
-              };
-              reader.readAsText(file);
-            }
-          };
-          input.click();
-        });
-        document.querySelector('.admin-buttons-grid').appendChild(importDataBtn);
 
         if (refreshDataBtn) {
           refreshDataBtn.addEventListener('click', function() {
@@ -1404,7 +1074,7 @@
         }
 
         // View toggle functions
-        async function toggleTopicView() {
+        function toggleTopicView() {
           const dropdownView = document.getElementById('topic-dropdown-view');
           const gridView = document.getElementById('topic-grid-view');
           const toggleBtn = document.getElementById('topic-view-toggle');
@@ -1414,16 +1084,16 @@
             dropdownView.style.display = 'none';
             gridView.style.display = 'block';
             toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">list</i> Chế độ dropdown';
-            await hybridStorageSet('index_topic_view', 'grid');
+            localStorage.setItem('index_topic_view', 'grid');
           } else {
             dropdownView.style.display = 'block';
             gridView.style.display = 'none';
             toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới';
-            await hybridStorageSet('index_topic_view', 'dropdown');
+            localStorage.setItem('index_topic_view', 'dropdown');
           }
         }
 
-        async function toggleExamView() {
+        function toggleExamView() {
           const dropdownView = document.getElementById('exam-dropdown-view');
           const gridView = document.getElementById('exam-grid-view');
           const toggleBtn = document.getElementById('exam-view-toggle');
@@ -1433,12 +1103,12 @@
             dropdownView.style.display = 'none';
             gridView.style.display = 'block';
             toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">list</i> Chế độ dropdown';
-            await hybridStorageSet('index_exam_view', 'grid');
+            localStorage.setItem('index_exam_view', 'grid');
           } else {
             dropdownView.style.display = 'block';
             gridView.style.display = 'none';
             toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới';
-            await hybridStorageSet('index_exam_view', 'dropdown');
+            localStorage.setItem('index_exam_view', 'dropdown');
           }
         }
 
@@ -1550,27 +1220,21 @@
           console.log('Loading topics...');
           showLoadingState();
           
-          // Try to load from hybrid storage first
+          // Try to load from localStorage first
           try {
-            const localTopicsStr = await hybridStorageGet('quiz_topics');
+            const localTopicsStr = localStorage.getItem('quiz_topics');
             if (localTopicsStr) {
               const localTopics = JSON.parse(localTopicsStr);
               if (Array.isArray(localTopics) && localTopics.length > 0) {
-                console.log('Loaded topics from storage:', localTopics.length);
+                console.log('Loaded topics from localStorage:', localTopics.length);
                 hideLoadingState();
                 renderLists(localTopics);
                 return;
               }
             }
           } catch (e) {
-            console.warn('Error loading from storage:', e);
-            // Clear corrupted data from both storages
-            localStorage.removeItem('quiz_topics');
-            try {
-              await indexedDBStorage.removeItem('quiz_topics');
-            } catch (dbError) {
-              console.warn('Could not clear IndexedDB:', dbError);
-            }
+            console.warn('Error loading from localStorage:', e);
+            localStorage.removeItem('quiz_topics'); // Clear corrupted data
           }
           
           // Try to load from remote with multiple fallback strategies
@@ -1610,10 +1274,10 @@
                   );
                   
                   if (validTopics.length > 0) {
-                    if (!(await hybridStorageSet('quiz_topics', JSON.stringify(validTopics)))) {
-                      console.warn('Could not save topics to any storage');
+                    if (!safeLocalStorageSet('quiz_topics', JSON.stringify(validTopics))) {
+                      console.warn('Could not save to localStorage due to quota exceeded');
                     } else {
-                      console.log('Valid topics saved to storage:', validTopics.length);
+                      console.log('Valid topics saved to localStorage:', validTopics.length);
                     }
                     hideLoadingState();
                     renderLists(validTopics);
@@ -1643,7 +1307,7 @@
 
 
       // Delete all review topics (created from wrong answers)
-      window.deleteAllReviewTopics = async function() {
+      window.deleteAllReviewTopics = function() {
         const allTopics = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
         const reviewTopics = allTopics.filter(topic => topic.name.includes('Ôn tập câu sai'));
         
@@ -1661,17 +1325,17 @@
           
           // Remove all review topics
           const updatedTopics = allTopics.filter(topic => !topic.name.includes('Ôn tập câu sai'));
-          await hybridStorageSet('quiz_topics', JSON.stringify(updatedTopics));
+          localStorage.setItem('quiz_topics', JSON.stringify(updatedTopics));
           
           // Remove related statistics
           const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
           const updatedStats = allStats.filter(stat => !reviewTopicIds.includes(stat.topicId));
-          await hybridStorageSet('quiz_statistics', JSON.stringify(updatedStats));
+          localStorage.setItem('quiz_statistics', JSON.stringify(updatedStats));
           
           // Remove related wrong answers
           const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
           const updatedWrongAnswers = allWrongAnswers.filter(answer => !reviewTopicIds.includes(answer.topicId));
-          await hybridStorageSet('wrong_answers', JSON.stringify(updatedWrongAnswers));
+          localStorage.setItem('wrong_answers', JSON.stringify(updatedWrongAnswers));
           
           alert(`Đã xóa thành công ${reviewTopics.length} chuyên đề ôn tập!`);
           
@@ -1693,7 +1357,7 @@
       };
 
       // Delete review topic (created from wrong answers)
-      window.deleteReviewTopic = async function(topicId, topicName) {
+      window.deleteReviewTopic = function(topicId, topicName) {
         if (!confirm(`Bạn có chắc chắn muốn xóa chuyên đề "${topicName}"?\n\nHành động này sẽ xóa:\n- Chuyên đề ôn tập\n- Tất cả thống kê liên quan\n- Không thể hoàn tác`)) {
           return;
         }
@@ -1704,17 +1368,17 @@
           
           // Remove the topic
           const updatedTopics = allTopics.filter(topic => topic.id !== topicId);
-          await hybridStorageSet('quiz_topics', JSON.stringify(updatedTopics));
+          localStorage.setItem('quiz_topics', JSON.stringify(updatedTopics));
           
           // Remove related statistics
           const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
           const updatedStats = allStats.filter(stat => stat.topicId !== topicId);
-          await hybridStorageSet('quiz_statistics', JSON.stringify(updatedStats));
+          localStorage.setItem('quiz_statistics', JSON.stringify(updatedStats));
           
           // Remove related wrong answers
           const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
           const updatedWrongAnswers = allWrongAnswers.filter(answer => answer.topicId !== topicId);
-          await hybridStorageSet('wrong_answers', JSON.stringify(updatedWrongAnswers));
+          localStorage.setItem('wrong_answers', JSON.stringify(updatedWrongAnswers));
           
           alert('Đã xóa chuyên đề ôn tập thành công!');
           
@@ -1736,7 +1400,7 @@
       };
 
       // Create quiz from wrong answers
-      window.createQuizFromWrongAnswers = async function(topicId, topicName) {
+      window.createQuizFromWrongAnswers = function(topicId, topicName) {
         const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
         const allTopics = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
         
@@ -1812,9 +1476,7 @@
         
         const topics = allTopics;
         topics.push(newTopic);
-        if (!(await hybridStorageSet('quiz_topics', JSON.stringify(topics)))) {
-          console.warn('Could not save topics to storage');
-        }
+        localStorage.setItem('quiz_topics', JSON.stringify(topics));
         
         if (confirm('Đã tạo bài thi "' + newTopic.name + '"!\n\nBạn có muốn làm bài ngay không?')) {
           window.location.href = 'quiz.html?topic=' + newTopicId;

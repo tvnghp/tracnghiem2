@@ -8,14 +8,14 @@ function checkAuth() {
   return localStorage.getItem('admin_authenticated') === 'true';
 }
 
-async function handleLogin(e) {
+function handleLogin(e) {
   e.preventDefault();
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
   
   if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
-    safeLocalStorageSet('admin_authenticated', 'true');
-    await showAdminPanel();
+    localStorage.setItem('admin_authenticated', 'true');
+    showAdminPanel();
   } else {
     alert('Tên đăng nhập hoặc mật khẩu không đúng!');
   }
@@ -26,10 +26,10 @@ function handleLogout() {
   showLoginForm();
 }
 
-async function showAdminPanel() {
+function showAdminPanel() {
   document.getElementById('login-container').style.display = 'none';
   document.getElementById('admin-container').style.display = 'block';
-  await renderTopics();
+  renderTopics();
 }
 
 function showLoginForm() {
@@ -38,234 +38,16 @@ function showLoginForm() {
   document.getElementById('login-form').reset();
 }
 
-async function getTopics() {
-  try {
-    const topicsStr = await hybridStorageGet('quiz_topics');
-    return JSON.parse(topicsStr || '[]');
-  } catch (error) {
-    console.error('Error getting topics:', error);
-    return JSON.parse(localStorage.getItem('quiz_topics') || '[]');
-  }
+function getTopics() {
+  return JSON.parse(localStorage.getItem('quiz_topics') || '[]');
 }
 
-async function saveTopics(topics) {
-  try {
-    // Sử dụng hybrid storage để lưu
-    const success = await hybridStorageSet('quiz_topics', JSON.stringify(topics));
-    if (!success) {
-      throw new Error('Failed to save topics to storage');
-    }
-  } catch (error) {
-    console.error('Error saving topics:', error);
-    
-    // Nếu vẫn gặp lỗi quota, thử dọn dẹp dữ liệu cũ
-    if (error.name === 'QuotaExceededError') {
-      console.log('Quota exceeded, trying to cleanup old data...');
-      try {
-        // Dọn dẹp dữ liệu cũ
-        if (typeof cleanupOldData === 'function') {
-          cleanupOldData();
-        }
-        
-        // Thử lại
-        const retrySuccess = await hybridStorageSet('quiz_topics', JSON.stringify(topics));
-        if (retrySuccess) {
-          console.log('Successfully saved after cleanup');
-          return;
-        }
-      } catch (retryError) {
-        console.error('Still failed after cleanup:', retryError);
-      }
-    }
-    
-    throw error;
-  }
+function saveTopics(topics) {
+  localStorage.setItem('quiz_topics', JSON.stringify(topics));
 }
 
 function uuid() {
   return 'topic-' + Math.random().toString(36).substr(2, 9) + Date.now();
-}
-
-// Hybrid storage functions
-async function hybridStorageSet(key, value) {
-  try {
-    // Thử localStorage trước
-    if (safeLocalStorageSet(key, value)) {
-      return true;
-    }
-  } catch (e) {
-    console.log('localStorage failed, trying IndexedDB...');
-  }
-  
-  try {
-    // Fallback to IndexedDB
-    await indexedDBStorage.setItem(key, value);
-    console.log(`Data saved to IndexedDB: ${key}`);
-    return true;
-  } catch (e) {
-    console.error('Both localStorage and IndexedDB failed:', e);
-    return false;
-  }
-}
-
-async function hybridStorageGet(key) {
-  try {
-    // Thử localStorage trước
-    const localData = localStorage.getItem(key);
-    if (localData) {
-      return localData;
-    }
-  } catch (e) {
-    console.log('localStorage read failed, trying IndexedDB...');
-  }
-  
-  try {
-    // Fallback to IndexedDB
-    const indexedData = await indexedDBStorage.getItem(key);
-    return indexedData;
-  } catch (e) {
-    console.error('Both localStorage and IndexedDB read failed:', e);
-    return null;
-  }
-}
-
-// Wrapper function để lưu dữ liệu an toàn
-function safeLocalStorageSet(key, value) {
-  try {
-    localStorage.setItem(key, value);
-    return true;
-  } catch (error) {
-    if (error.name === 'QuotaExceededError') {
-      console.warn('Quota exceeded for localStorage');
-      return false;
-    }
-    throw error;
-  }
-}
-
-// IndexedDB storage class
-class IndexedDBStorage {
-  constructor() {
-    this.dbName = 'QuizStorageDB';
-    this.version = 1;
-    this.db = null;
-  }
-
-  async init() {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, this.version);
-      
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        this.db = request.result;
-        resolve(this.db);
-      };
-      
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        if (!db.objectStoreNames.contains('quizData')) {
-          db.createObjectStore('quizData', { keyPath: 'key' });
-        }
-      };
-    });
-  }
-
-  async setItem(key, value) {
-    if (!this.db) await this.init();
-    
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction(['quizData'], 'readwrite');
-      const store = transaction.objectStore('quizData');
-      const request = store.put({ key, value, timestamp: Date.now() });
-      
-      request.onsuccess = () => resolve(true);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async getItem(key) {
-    if (!this.db) await this.init();
-    
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction(['quizData'], 'readonly');
-      const store = transaction.objectStore('quizData');
-      const request = store.get(key);
-      
-      request.onsuccess = () => {
-        resolve(request.result ? request.result.value : null);
-      };
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async removeItem(key) {
-    if (!this.db) await this.init();
-    
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction(['quizData'], 'readwrite');
-      const store = transaction.objectStore('quizData');
-      const request = store.delete(key);
-      
-      request.onsuccess = () => resolve(true);
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  async clear() {
-    if (!this.db) await this.init();
-    
-    return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction(['quizData'], 'readwrite');
-      const store = transaction.objectStore('quizData');
-      const request = store.clear();
-      
-      request.onsuccess = () => resolve(true);
-      request.onerror = () => reject(request.error);
-    });
-  }
-}
-
-// Khởi tạo IndexedDB storage
-const indexedDBStorage = new IndexedDBStorage();
-
-// Xóa dữ liệu cũ tự động
-function cleanupOldData() {
-  try {
-    const now = Date.now();
-    const maxAge = 30 * 24 * 60 * 60 * 1000; // 30 ngày
-    
-    // Xóa thống kê cũ
-    const stats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
-    const recentStats = stats.filter(stat => {
-      const statTime = new Date(stat.timestamp).getTime();
-      return (now - statTime) < maxAge;
-    });
-    
-    if (recentStats.length < stats.length) {
-      safeLocalStorageSet('quiz_statistics', JSON.stringify(recentStats));
-      console.log(`Cleaned up ${stats.length - recentStats.length} old statistics`);
-    }
-    
-    // Xóa câu sai cũ
-    const wrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
-    const recentWrongAnswers = wrongAnswers.filter(answer => {
-      const answerTime = new Date(answer.timestamp).getTime();
-      return (now - answerTime) < maxAge;
-    });
-    
-    if (recentWrongAnswers.length < wrongAnswers.length) {
-      safeLocalStorageSet('wrong_answers', JSON.stringify(recentWrongAnswers));
-      console.log(`Cleaned up ${wrongAnswers.length - recentWrongAnswers.length} old wrong answers`);
-    }
-    
-    return {
-      statsRemoved: stats.length - recentStats.length,
-      wrongAnswersRemoved: wrongAnswers.length - recentWrongAnswers.length
-    };
-  } catch (e) {
-    console.error('Error cleaning up old data:', e);
-    return null;
-  }
 }
 
 function parseExcelFile(file, callback) {
@@ -368,8 +150,8 @@ function parseExcelFile(file, callback) {
   reader.readAsBinaryString(file);
 }
 
-async function renderTopics() {
-  const topics = await getTopics();
+function renderTopics() {
+  const topics = getTopics();
   const selector = document.getElementById('topic-selector');
   const detailContainer = document.getElementById('topic-detail-container');
   const gridContainer = document.getElementById('topic-list-container');
@@ -380,7 +162,7 @@ async function renderTopics() {
     if (gridContainer) gridContainer.innerHTML = '<div class="empty-state"><i class="material-icons">folder_open</i><p>Chưa có chuyên đề nào</p></div>';
     const eb = document.getElementById('exam-topic-percents');
     if (eb) eb.innerHTML = '<p>Chưa có chuyên đề để chọn.</p>';
-    await renderExams([]);
+    renderExams([]);
     return;
   }
   
@@ -414,11 +196,11 @@ async function renderTopics() {
     `).join('');
   }
 
-  await renderExamBuilderTopics(normalTopics);
-  await renderExams(exams);
+  renderExamBuilderTopics(normalTopics);
+  renderExams(exams);
 }
 
-async function updateExamView(exam) {
+function updateExamView(exam) {
   const editBtn = document.getElementById('edit-exam-btn');
   const deleteBtn = document.getElementById('delete-exam-btn');
   const detailContainer = document.getElementById('exam-detail-container');
@@ -449,7 +231,7 @@ async function updateExamView(exam) {
   }
 }
 
-async function renderExams(exams) {
+function renderExams(exams) {
   const selector = document.getElementById('exam-selector');
   const detailContainer = document.getElementById('exam-detail-container');
   const gridContainer = document.getElementById('exam-list-container');
@@ -460,7 +242,7 @@ async function renderExams(exams) {
     selector.innerHTML = '<option value="">-- Chưa có bài thi --</option>';
     detailContainer.style.display = 'none';
     if (gridContainer) gridContainer.innerHTML = '<div class="empty-state"><i class="material-icons">assignment</i><p>Chưa có bài thi nào</p></div>';
-    await updateExamView(null);
+    updateExamView(null);
     return;
   }
   
@@ -475,13 +257,13 @@ async function renderExams(exams) {
   
   // Clear detail on re-render
   detailContainer.style.display = 'none';
-  await updateExamView(null);
+  updateExamView(null);
   
   // Setup selector change event
-  selector.onchange = async (e) => {
+  selector.onchange = (e) => {
     const examId = e.target.value;
     const exam = exams.find(ex => ex.id === examId);
-    await updateExamView(exam);
+    updateExamView(exam);
   };
   
   // Populate grid view
@@ -510,8 +292,8 @@ async function renderExams(exams) {
 }
 
 // ===== Edit Topic Logic =====
-window.openEditTopic = async function(topicId) {
-  const topics = await getTopics();
+window.openEditTopic = function(topicId) {
+  const topics = getTopics();
   const topic = topics.find(t => t.id === topicId && !t.isExam);
   if (!topic) return;
   
@@ -522,7 +304,7 @@ window.openEditTopic = async function(topicId) {
   document.getElementById('edit-topic-modal').classList.remove('hidden');
 }
 
-async function saveEditTopic(e) {
+function saveEditTopic(e) {
   e.preventDefault();
   const msg = document.getElementById('edit-topic-msg');
   msg.textContent = '';
@@ -536,7 +318,7 @@ async function saveEditTopic(e) {
     return;
   }
   
-  const topics = await getTopics();
+  const topics = getTopics();
   const idx = topics.findIndex(t => t.id === id && !t.isExam);
   if (idx === -1) {
     msg.textContent = 'Không tìm thấy chuyên đề!';
@@ -547,29 +329,29 @@ async function saveEditTopic(e) {
   if (!file) {
     // Chỉ đổi tên
     topics[idx].name = name;
-    await saveTopics(topics);
-    await renderTopics();
+    saveTopics(topics);
+    renderTopics();
     document.getElementById('edit-topic-modal').classList.add('hidden');
     return;
   }
   
   // Đổi tên + thay câu hỏi
-  parseExcelFile(file, async (result) => {
+  parseExcelFile(file, (result) => {
     if (result.error) {
       msg.textContent = result.error;
       return;
     }
     topics[idx].name = name;
     topics[idx].questions = result.questions;
-    await saveTopics(topics);
-    await renderTopics();
+    saveTopics(topics);
+    renderTopics();
     document.getElementById('edit-topic-modal').classList.add('hidden');
   });
 }
 
 // ===== Edit Exam Logic =====
-window.openEditExam = async function(examId) {
-  const topics = await getTopics();
+window.openEditExam = function(examId) {
+  const topics = getTopics();
   const exam = topics.find(t => t.id === examId && t.isExam);
   if (!exam) return;
   
@@ -578,12 +360,12 @@ window.openEditExam = async function(examId) {
   document.getElementById('edit-exam-total').value = exam.examConfig?.total || (exam.questions?.length || 0);
   document.getElementById('edit-exam-duration').value = exam.durationMinutes || '';
   document.getElementById('edit-exam-allow-pause').checked = !!exam.allowPause;
-  await renderEditExamTopics(topics.filter(t => !t.isExam), exam);
+  renderEditExamTopics(topics.filter(t => !t.isExam), exam);
   document.getElementById('edit-exam-msg').textContent = '';
   document.getElementById('edit-exam-modal').classList.remove('hidden');
 }
 
-async function renderEditExamTopics(allTopics, exam) {
+function renderEditExamTopics(allTopics, exam) {
   const holder = document.getElementById('edit-exam-topic-percents');
   if (!holder) return;
   if (!allTopics || allTopics.length === 0) {
@@ -623,7 +405,7 @@ async function renderEditExamTopics(allTopics, exam) {
   });
 }
 
-async function saveEditExam(e) {
+function saveEditExam(e) {
   e.preventDefault();
   const msg = document.getElementById('edit-exam-msg');
   msg.textContent = '';
@@ -656,7 +438,7 @@ async function saveEditExam(e) {
   }
   if (Math.round(sumPercent) !== 100) { msg.textContent = 'Tổng tỷ lệ phải bằng 100%'; return; }
 
-  const topics = await getTopics();
+  const topics = getTopics();
   const idx = topics.findIndex(t => t.id === id && t.isExam);
   if (idx === -1) { msg.textContent = 'Không tìm thấy bài thi!'; return; }
   
@@ -664,19 +446,19 @@ async function saveEditExam(e) {
   topics[idx].durationMinutes = durationMinutes;
   topics[idx].allowPause = allowPause;
   topics[idx].examConfig = { total, distribution: dist };
-  await saveTopics(topics);
+  saveTopics(topics);
   
   try { localStorage.removeItem(`quiz_exam_questions_${id}`); } catch(_) {}
-  await renderTopics();
+  renderTopics();
   document.getElementById('edit-exam-modal').classList.add('hidden');
 }
 
-window.delTopic = async function(id) {
+window.delTopic = function(id) {
   if (!confirm('Bạn có chắc chắn muốn xóa chuyên đề này?')) return;
-  const all = await getTopics();
+  const all = getTopics();
   const removed = all.find(topic => topic.id === id);
   const topics = all.filter(topic => topic.id !== id);
-  await saveTopics(topics);
+  saveTopics(topics);
   if (removed && removed.isExam === true) {
     try { localStorage.removeItem(`quiz_exam_questions_${id}`); } catch(_) {}
   }
@@ -687,7 +469,7 @@ window.delTopic = async function(id) {
   document.getElementById('topic-detail-container').style.display = 'none';
   document.getElementById('exam-detail-container').style.display = 'none';
   
-  await renderTopics();
+  renderTopics();
 };
 
 function shuffleArray(arr) {
@@ -698,7 +480,7 @@ function shuffleArray(arr) {
   return arr;
 }
 
-async function renderExamBuilderTopics(topics) {
+function renderExamBuilderTopics(topics) {
   const holderDropdown = document.getElementById('exam-topic-percents');
   const holderGrid = document.getElementById('exam-topic-percents-grid');
   
@@ -1110,7 +892,7 @@ function normalizePercents(scopeEl, viewType = 'dropdown') {
   if (lastInp) lastInp.value = String(remain);
 }
 
-async function buildCompositeExam(e) {
+function buildCompositeExam(e) {
   e.preventDefault();
   const msg = document.getElementById('exam-builder-msg');
   msg.textContent = '';
@@ -1119,7 +901,7 @@ async function buildCompositeExam(e) {
   const total = parseInt(document.getElementById('exam-total').value, 10);
   const durationMinutes = parseInt(document.getElementById('exam-duration').value, 10);
   const allowPause = !!document.getElementById('exam-allow-pause').checked;
-  const allTopics = await getTopics();
+  const allTopics = getTopics();
 
   if (!name) { msg.textContent = 'Vui lòng nhập tên bộ đề!'; return; }
   if (!Number.isFinite(total) || total <= 0) { msg.textContent = 'Tổng số câu hỏi phải là số > 0!'; return; }
@@ -1249,41 +1031,24 @@ async function buildCompositeExam(e) {
 
   const topics = allTopics.slice();
   const examConfig = { total: total, distribution: dist };
-  
-  // Tạo bài thi với câu hỏi tối thiểu để tránh quota exceeded
-  const examTopic = { 
+  topics.push({ 
     id: uuid(), 
     name: name, 
     isExam: true, 
     examConfig: examConfig, 
-    questions: [], // Không lưu câu hỏi trực tiếp, sẽ tạo động
+    questions: combined, 
     durationMinutes: durationMinutes, 
     allowPause: allowPause 
-  };
-  
-  topics.push(examTopic);
-  
-  // Sử dụng hybrid storage để lưu
-  try {
-    await saveTopics(topics);
-    console.log('Exam created successfully with hybrid storage');
-  } catch (error) {
-    console.error('Error creating exam:', error);
-    if (error.name === 'QuotaExceededError') {
-      msg.textContent = 'Lỗi: Dung lượng lưu trữ đầy! Vui lòng:\n1. Nhấn "Dọn dẹp dữ liệu cũ"\n2. Hoặc giảm số câu hỏi\n3. Hoặc xóa bộ nhớ';
-    } else {
-      msg.textContent = 'Lỗi tạo bài thi: ' + error.message;
-    }
-    return;
-  }
-  await renderTopics();
+  });
+  saveTopics(topics);
+  renderTopics();
   document.getElementById('exam-builder-form').reset();
   msg.textContent = 'Tạo bộ đề thành công!';
   setTimeout(() => { msg.textContent = ''; }, 2000);
 }
 
-async function exportTopicsJson() {
-  const topics = await getTopics();
+function exportTopicsJson() {
+  const topics = getTopics();
   const blob = new Blob([JSON.stringify(topics, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1300,12 +1065,12 @@ function importTopicsJson() {
   fileInput.click();
 }
 
-async function handleImportFile(e) {
+function handleImportFile(e) {
   const file = e.target.files[0];
   if (!file) return;
   
   const reader = new FileReader();
-  reader.onload = async function(evt) {
+  reader.onload = function(evt) {
     try {
       const data = JSON.parse(evt.target.result);
       
@@ -1333,8 +1098,8 @@ async function handleImportFile(e) {
       if (!confirm(confirmMsg)) return;
       
       // Save to localStorage
-      await saveTopics(data);
-      await renderTopics();
+      saveTopics(data);
+      renderTopics();
       alert(`Đã import thành công ${data.length} chuyên đề/bài thi!`);
       
     } catch (err) {
@@ -1370,13 +1135,13 @@ function toggleTopicView() {
     dropdownView.style.display = 'none';
     gridView.style.display = 'block';
     toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">list</i> Chế độ dropdown';
-    safeLocalStorageSet('admin_topic_view', 'grid');
+    localStorage.setItem('admin_topic_view', 'grid');
   } else {
     // Switch to dropdown
     dropdownView.style.display = 'block';
     gridView.style.display = 'none';
     toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới';
-    safeLocalStorageSet('admin_topic_view', 'dropdown');
+    localStorage.setItem('admin_topic_view', 'dropdown');
   }
 }
 
@@ -1402,7 +1167,7 @@ function toggleExamView() {
     dropdownView.style.display = 'none';
     gridView.style.display = 'block';
     toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">list</i> Chế độ dropdown';
-    safeLocalStorageSet('admin_exam_view', 'grid');
+    localStorage.setItem('admin_exam_view', 'grid');
     
     // Sync selection from dropdown to grid
     const examId = document.getElementById('exam-selector').value;
@@ -1416,7 +1181,7 @@ function toggleExamView() {
     dropdownView.style.display = 'block';
     gridView.style.display = 'none';
     toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới';
-    safeLocalStorageSet('admin_exam_view', 'dropdown');
+    localStorage.setItem('admin_exam_view', 'dropdown');
     
     // Sync selection from grid to dropdown
     const selectedExam = document.querySelector('#exam-list-container .topic-item.selected');
@@ -1441,13 +1206,13 @@ function toggleExamBuilderView() {
     if (dropdownView) dropdownView.style.display = 'none';
     if (gridView) gridView.style.display = 'block';
     if (toggleBtn) toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">list</i> Chế độ dropdown';
-    safeLocalStorageSet('admin_exam_builder_view', 'grid');
+    localStorage.setItem('admin_exam_builder_view', 'grid');
   } else {
     // Switch to dropdown
     if (dropdownView) dropdownView.style.display = 'block';
     if (gridView) gridView.style.display = 'none';
     if (toggleBtn) toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới';
-    safeLocalStorageSet('admin_exam_builder_view', 'dropdown');
+    localStorage.setItem('admin_exam_builder_view', 'dropdown');
   }
 }
 
@@ -1503,7 +1268,7 @@ function initializeViews() {
 }
 
 // Topic management functions
-async function renderTopicItem(topic, container) {
+function renderTopicItem(topic, container) {
   const topicEl = document.createElement('div');
   topicEl.className = 'topic-item';
   topicEl.dataset.id = topic.id;
@@ -1531,7 +1296,7 @@ async function renderTopicItem(topic, container) {
   return topicEl;
 }
 
-async function updateTopicView(topic) {
+function updateTopicView(topic) {
   if (!topic) {
     document.getElementById('topic-detail-container').style.display = 'none';
     document.getElementById('edit-topic-btn').disabled = true;
@@ -1547,11 +1312,11 @@ async function updateTopicView(topic) {
   
   // Store current topic ID in edit/delete buttons
   const topicId = topic.id;
-  document.getElementById('edit-topic-btn').onclick = async () => await openEditTopic(topicId);
-  document.getElementById('delete-topic-btn').onclick = async () => await delTopic(topicId);
+  document.getElementById('edit-topic-btn').onclick = () => openEditTopic(topicId);
+  document.getElementById('delete-topic-btn').onclick = () => delTopic(topicId);
 }
 
-async function renderTopicDropdown(topics) {
+function renderTopicDropdown(topics) {
   const selector = document.getElementById('topic-selector');
   selector.innerHTML = '<option value="">-- Chọn chuyên đề --</option>';
   
@@ -1562,14 +1327,14 @@ async function renderTopicDropdown(topics) {
     selector.appendChild(option);
   });
   
-  selector.onchange = async (e) => {
+  selector.onchange = (e) => {
     const topicId = e.target.value;
     const topic = topics.find(t => t.id === topicId);
-    await updateTopicView(topic);
+    updateTopicView(topic);
   };
 }
 
-async function renderTopicGrid(topics) {
+function renderTopicGrid(topics) {
   const container = document.getElementById('topic-list-container');
   container.innerHTML = '';
   
@@ -1579,44 +1344,44 @@ async function renderTopicGrid(topics) {
   }
   
   topics.forEach(topic => {
-    const topicEl = await renderTopicItem(topic);
+    const topicEl = renderTopicItem(topic);
     container.appendChild(topicEl);
     
     // Add event listeners for edit/delete buttons
-    topicEl.querySelector('.edit-topic').onclick = async (e) => {
+    topicEl.querySelector('.edit-topic').onclick = (e) => {
       e.stopPropagation();
-      await openEditTopic(topic.id);
+      openEditTopic(topic.id);
     };
     
-    topicEl.querySelector('.delete-topic').onclick = async (e) => {
+    topicEl.querySelector('.delete-topic').onclick = (e) => {
       e.stopPropagation();
-      await delTopic(topic.id);
+      delTopic(topic.id);
     };
     
-    topicEl.onclick = async () => {
+    topicEl.onclick = () => {
       // Toggle selection
       document.querySelectorAll('.topic-item').forEach(el => el.classList.remove('selected'));
       topicEl.classList.add('selected');
-      await updateTopicView(topic);
+      updateTopicView(topic);
     };
   });
 }
 
 // Initialize
-document.addEventListener('DOMContentLoaded', async function() {
+document.addEventListener('DOMContentLoaded', function() {
   if (checkAuth()) {
-    await showAdminPanel();
+    showAdminPanel();
     initializeViews();
     
     // Initialize topic management
-    const topics = await getTopics();
-    await renderTopicDropdown(topics);
-    await renderTopicGrid(topics);
+    const topics = getTopics();
+    renderTopicDropdown(topics);
+    renderTopicGrid(topics);
     
     // Add new topic button
     const addTopicBtn = document.getElementById('add-topic-btn');
     if (addTopicBtn) {
-      addTopicBtn.onclick = async () => {
+      addTopicBtn.onclick = () => {
         const topicFormContainer = document.querySelector('.topic-form');
         if (topicFormContainer) topicFormContainer.scrollIntoView({ behavior: 'smooth' });
       };
@@ -1625,7 +1390,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Save topic form
     const topicForm = document.getElementById('topic-form');
     if (topicForm) {
-      topicForm.onsubmit = async (e) => {
+      topicForm.onsubmit = (e) => {
         e.preventDefault();
         const topicName = document.getElementById('topic-name').value.trim();
         const fileInput = document.getElementById('file-quiz');
@@ -1643,14 +1408,14 @@ document.addEventListener('DOMContentLoaded', async function() {
           return;
         }
         
-        parseExcelFile(fileInput.files[0], async (result) => {
+        parseExcelFile(fileInput.files[0], (result) => {
           if (result.error) {
             msgEl.textContent = result.error;
             msgEl.className = 'ml-2 error';
             return;
           }
           
-          const topics = await getTopics();
+          const topics = getTopics();
           const newTopic = {
             id: uuid(),
             name: topicName,
@@ -1659,7 +1424,7 @@ document.addEventListener('DOMContentLoaded', async function() {
           };
           
           topics.push(newTopic);
-          await saveTopics(topics);
+          saveTopics(topics);
           
           // Reset form
           topicForm.reset();
@@ -1667,7 +1432,7 @@ document.addEventListener('DOMContentLoaded', async function() {
           msgEl.className = 'ml-2 success';
           
           // Refresh views
-          await renderTopics();
+          renderTopics();
           
           setTimeout(() => {
             msgEl.textContent = '';
@@ -1700,7 +1465,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   
   // Topic selector change handler
   const topicSelector = document.getElementById('topic-selector');
-  if (topicSelector) topicSelector.addEventListener('change', async function(e) {
+  if (topicSelector) topicSelector.addEventListener('change', function(e) {
     const topicId = e.target.value;
     const detailContainer = document.getElementById('topic-detail-container');
     const detailDiv = document.getElementById('selected-topic-detail');
@@ -1710,7 +1475,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       return;
     }
     
-    const topics = await getTopics();
+    const topics = getTopics();
     const topic = topics.find(t => t.id === topicId && !t.isExam);
     
     if (topic) {
@@ -1734,7 +1499,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   
   // Exam selector change handler
   const examSelector = document.getElementById('exam-selector');
-  if (examSelector) examSelector.addEventListener('change', async function(e) {
+  if (examSelector) examSelector.addEventListener('change', function(e) {
     const examId = e.target.value;
     const detailContainer = document.getElementById('exam-detail-container');
     const detailDiv = document.getElementById('selected-exam-detail');
@@ -1744,7 +1509,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       return;
     }
     
-    const topics = await getTopics();
+    const topics = getTopics();
     const exam = topics.find(t => t.id === examId && t.isExam);
     
     if (exam) {
@@ -1772,7 +1537,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   
   // Topic form
   const topicFormSubmit = document.getElementById('topic-form');
-  if (topicFormSubmit) topicFormSubmit.addEventListener('submit', async function(e) {
+  if (topicFormSubmit) topicFormSubmit.addEventListener('submit', function(e) {
     e.preventDefault();
     const name = document.getElementById('topic-name').value.trim();
     const fileInput = document.getElementById('file-quiz');
@@ -1783,20 +1548,20 @@ document.addEventListener('DOMContentLoaded', async function() {
     const file = fileInput.files[0];
     if (!file) { msg.textContent = "Vui lòng chọn file câu hỏi!"; return; }
     
-    parseExcelFile(file, async (result) => {
+    parseExcelFile(file, (result) => {
       if (result.error) {
         msg.textContent = result.error;
         return;
       }
       
-      const topics = await getTopics();
+      const topics = getTopics();
       topics.push({
         id: uuid(),
         name: name,
         questions: result.questions
       });
-      await saveTopics(topics);
-      await renderTopics();
+      saveTopics(topics);
+      renderTopics();
       document.getElementById('topic-form').reset();
       msg.textContent = "Tạo chuyên đề thành công!";
       setTimeout(() => { msg.textContent = ''; }, 2000);
@@ -1805,7 +1570,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   
   // Edit Topic modal handlers
   const editTopicForm = document.getElementById('edit-topic-form');
-  if (editTopicForm) editTopicForm.addEventListener('submit', async (e) => await saveEditTopic(e));
+  if (editTopicForm) editTopicForm.addEventListener('submit', saveEditTopic);
   
   const editTopicCancel = document.getElementById('edit-topic-cancel');
   if (editTopicCancel) editTopicCancel.addEventListener('click', () => {
@@ -1814,7 +1579,7 @@ document.addEventListener('DOMContentLoaded', async function() {
   
   // Edit Exam modal handlers
   const editExamForm = document.getElementById('edit-exam-form');
-  if (editExamForm) editExamForm.addEventListener('submit', async (e) => await saveEditExam(e));
+  if (editExamForm) editExamForm.addEventListener('submit', saveEditExam);
   
   const editExamCancel = document.getElementById('edit-exam-cancel');
   if (editExamCancel) editExamCancel.addEventListener('click', () => {
@@ -1823,17 +1588,17 @@ document.addEventListener('DOMContentLoaded', async function() {
   
   // Exam Builder
   const examBuilderForm = document.getElementById('exam-builder-form');
-  if (examBuilderForm) examBuilderForm.addEventListener('submit', async (e) => await buildCompositeExam(e));
+  if (examBuilderForm) examBuilderForm.addEventListener('submit', buildCompositeExam);
   
   // Export
   const exportBtn = document.getElementById('export-json-btn');
-  if (exportBtn) exportBtn.addEventListener('click', async () => await exportTopicsJson());
+  if (exportBtn) exportBtn.addEventListener('click', exportTopicsJson);
   // Import
   const importBtn = document.getElementById('import-json-btn');
   if (importBtn) importBtn.addEventListener('click', importTopicsJson);
   
   const importFileInput = document.getElementById('import-json-file');
-  if (importFileInput) importFileInput.addEventListener('change', async (e) => await handleImportFile(e));
+  if (importFileInput) importFileInput.addEventListener('change', handleImportFile);
   
   // Test Google Sheets connection
   const testGoogleSheetsBtn = document.getElementById('test-google-sheets-btn');
