@@ -61,12 +61,16 @@ function handleSubmitQuiz(data) {
     ]);
   }
   
+  // Xử lý fullname và branch - chỉ dùng giá trị mặc định khi thực sự không có
+  const fullname = (data.fullname && data.fullname.trim()) ? data.fullname.trim() : 'Người dùng ẩn danh';
+  const branch = (data.branch && data.branch.trim()) ? data.branch.trim() : 'Không xác định';
+  
   // Thêm dữ liệu submission
   submissionsSheet.appendRow([
     new Date(),
     data.userId || 'Anonymous',
-    data.fullname || 'Người dùng ẩn danh',
-    data.branch || 'Không xác định',
+    fullname,
+    branch,
     data.topicId,
     data.topicName,
     data.isExam ? 'Yes' : 'No',

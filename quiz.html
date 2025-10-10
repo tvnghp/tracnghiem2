@@ -317,26 +317,45 @@
   }
   
   .result-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    justify-content: center;
+    margin-top: 2rem;
   }
   
-  .result-actions .btn {
+  .result-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  
+  .result-btn {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
-    padding: 12px 20px;
-    border-radius: 6px;
+    padding: 14px 20px;
+    border-radius: 8px;
     text-decoration: none;
-    font-weight: 500;
+    font-weight: 600;
     transition: all 0.3s ease;
+    min-height: 52px;
+    font-size: 0.95rem;
   }
   
-  .result-actions .btn:hover {
+  .result-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  }
+  
+  .result-btn.primary {
+    background: var(--primary-color);
+    color: white;
+    border: 2px solid var(--primary-color);
+  }
+  
+  .result-btn.primary:hover {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
   }
   
   /* Header styling */
@@ -436,15 +455,17 @@
       padding: 15px;
     }
     
-    .result-actions {
-      flex-direction: column;
-      align-items: center;
+    .result-actions-grid {
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+      max-width: 100%;
     }
     
-    .result-actions .btn {
+    .result-btn {
       width: 100%;
-      max-width: 200px;
-      justify-content: center;
+      font-size: 0.9rem;
+      padding: 12px 16px;
+      min-height: 48px;
     }
     
     .header-top {
@@ -609,6 +630,42 @@
         </div>
     </div>
   </div>
+
+<!-- Modal nhập thông tin người dùng trước khi nộp bài -->
+  <div id="user-info-modal" class="modal hidden">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3>Kết quả và thông tin</h3>
+        <button id="close-user-info-modal" class="close-btn">&times;</button>
+      </div>
+      
+      <!-- Hiển thị điểm số -->
+      <div id="score-preview" style="text-align: center; margin-bottom: 20px; padding: 16px; background: #f8f9fa; border-radius: 8px;">
+        <div style="font-size: 24px; font-weight: bold; color: #2196f3; margin-bottom: 8px;">
+          <span id="preview-correct">0</span>/<span id="preview-total">0</span>
+        </div>
+        <div style="font-size: 18px; color: #666;">
+          <span id="preview-percentage">0</span>%
+        </div>
+      </div>
+      
+      <p style="margin-bottom: 16px;">Vui lòng nhập thông tin của bạn (tùy chọn):</p>
+      <form id="user-info-form">
+        <div class="form-group">
+          <label for="user-fullname">Họ tên</label>
+          <input type="text" id="user-fullname" name="fullname" placeholder="Nhập họ tên của bạn">
+        </div>
+        <div class="form-group">
+          <label for="user-branch">Đơn vị</label>
+          <input type="text" id="user-branch" name="branch" placeholder="Nhập đơn vị">
+        </div>
+      </form>
+      <div class="modal-actions">
+        <button id="cancel-submit-btn" class="btn btn-outline">Hủy</button>
+        <button id="confirm-submit-btn" class="btn btn-primary">Xác nhận nộp bài</button>
+      </div>
+    </div>
+  </div>
   <script>
     // DOM Elements - will be initialized when DOM is ready
     let questionEl, answersEl, progressEl, questionCounterEl, prevBtn, nextBtn, submitBtn, flagBtn;
@@ -616,6 +673,7 @@
     let explanationEl, resultArea, timerEl, pauseBtn;
     let questionSidebar, questionList, toggleSidebarBtn, sidebarToggleBtn;
     let sessionModal, resumeBtn, newSessionBtn, closeSessionModal;
+    let userInfoModal, userInfoForm, userFullnameInput, userBranchInput, cancelSubmitBtn, confirmSubmitBtn, closeUserInfoModal;
 
     // Quiz state
     let topicId = null;
@@ -653,6 +711,13 @@
       resumeBtn = document.getElementById('resume-btn');
       newSessionBtn = document.getElementById('new-session-btn');
       closeSessionModal = document.getElementById('close-session-modal');
+      userInfoModal = document.getElementById('user-info-modal');
+      userInfoForm = document.getElementById('user-info-form');
+      userFullnameInput = document.getElementById('user-fullname');
+      userBranchInput = document.getElementById('user-branch');
+      cancelSubmitBtn = document.getElementById('cancel-submit-btn');
+      confirmSubmitBtn = document.getElementById('confirm-submit-btn');
+      closeUserInfoModal = document.getElementById('close-user-info-modal');
     }
 
 function scrollToQuestion() {
@@ -1382,11 +1447,13 @@ requestAnimationFrame(() => {
         localStorage.setItem('wrong_answers', JSON.stringify(existingWrongAnswers));
       }
       
-      // Get user info from form
-      const fullnameInput = document.getElementById('fullname');
-      const branchInput = document.getElementById('branch');
-      const fullname = fullnameInput ? fullnameInput.value.trim() : 'Người dùng ẩn danh';
-      const branch = branchInput ? branchInput.value.trim() : 'Không xác định';
+      // Get user info from modal - lưu chính xác giá trị đã nhập
+      const fullname = userFullnameInput ? userFullnameInput.value.trim() : '';
+      const branch = userBranchInput ? userBranchInput.value.trim() : '';
+      
+      // Nếu không nhập gì thì dùng giá trị mặc định
+      const finalFullname = fullname || 'Người dùng ẩn danh';
+      const finalBranch = branch || 'Không xác định';
       
       // Save session statistics
       const sessionStats = {
@@ -1398,8 +1465,8 @@ requestAnimationFrame(() => {
         wrongAnswers: wrongAnswers.length,
         score: Math.round((correctAnswers.length / questions.length) * 100),
         isExam: topic.isExam === true,
-        fullname: fullname,
-        branch: branch
+        fullname: finalFullname,
+        branch: finalBranch
       };
       const existingStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
       existingStats.push(sessionStats);
@@ -1407,10 +1474,6 @@ requestAnimationFrame(() => {
       
       console.log('Saved statistics:', sessionStats);
       console.log('Wrong answers saved:', wrongAnswers.length);
-      
-      // Test: Log all statistics to see what's stored
-      const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
-      console.log('All statistics in localStorage:', allStats);
       
       // Gửi dữ liệu lên Google Sheets nếu được cấu hình
       if (window.QUIZ_CONFIG && window.QUIZ_CONFIG.ENABLE_CLOUD_SYNC && window.isConfigured()) {
@@ -1465,8 +1528,11 @@ requestAnimationFrame(() => {
           score: sessionStats.score,
           duration: 0, // Có thể thêm tracking thời gian sau
           wrongAnswersList: wrongAnswersList,
-          userAgent: navigator.userAgent
+          userAgent: navigator.userAgent,
+          fullname: sessionStats.fullname,
+          branch: sessionStats.branch
         };
+        
         
         const response = await fetch(window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL, {
           method: 'POST',
@@ -1516,16 +1582,47 @@ requestAnimationFrame(() => {
 
     function submitQuiz() {
       if (quizSubmitted) return;
-      if (confirm('Bạn có chắc chắn muốn nộp bài không?')) {
-        quizSubmitted = true;
-        showResults();
-        saveProgress();
-        saveWrongAnswers();
-        // clear timer keys
-        localStorage.removeItem(`quiz_timer_end_${topicId}`);
-        localStorage.removeItem(`quiz_timer_paused_${topicId}`);
-        localStorage.removeItem(`quiz_timer_remaining_${topicId}`);
-      }
+      
+      // Tính điểm số trước khi hiển thị modal
+      const correctCount = userAnswers.filter(a => a.correct).length;
+      const totalQuestions = questions.length;
+      const score = Math.round((correctCount / totalQuestions) * 100);
+      
+      // Cập nhật hiển thị điểm số trong modal
+      const previewCorrect = document.getElementById('preview-correct');
+      const previewTotal = document.getElementById('preview-total');
+      const previewPercentage = document.getElementById('preview-percentage');
+      
+      if (previewCorrect) previewCorrect.textContent = correctCount;
+      if (previewTotal) previewTotal.textContent = totalQuestions;
+      if (previewPercentage) previewPercentage.textContent = score;
+      
+      // Hiển thị modal nhập thông tin người dùng
+      userInfoModal.classList.remove('hidden');
+      
+      // Focus vào trường họ tên
+      setTimeout(() => {
+        if (userFullnameInput) {
+          userFullnameInput.focus();
+        }
+      }, 100);
+    }
+
+    function confirmSubmitQuiz() {
+      if (quizSubmitted) return;
+      
+      // Đóng modal (không cần kiểm tra bắt buộc nữa)
+      userInfoModal.classList.add('hidden');
+      
+      // Nộp bài
+      quizSubmitted = true;
+      showResults();
+      saveProgress();
+      saveWrongAnswers();
+      // clear timer keys
+      localStorage.removeItem(`quiz_timer_end_${topicId}`);
+      localStorage.removeItem(`quiz_timer_paused_${topicId}`);
+      localStorage.removeItem(`quiz_timer_remaining_${topicId}`);
     }
 function getAnswerStatus(index){
   const ua = userAnswers?.[index];
@@ -1558,34 +1655,53 @@ function updateNextBtnStatus(){
             <div class="percentage">${score}%</div>
           </div>
           
-          <form id="result-form" class="result-form">
+          <div class="result-form">
             <div class="form-group">
-              <label for="fullname">Họ tên (tùy chọn)</label>
-              <input type="text" id="fullname" name="fullname" placeholder="Nhập họ tên của bạn">
+              <label style="font-size: 1.1rem; font-weight: 600; color: var(--primary-color); margin-bottom: 12px; display: block;">Thông tin người làm bài:</label>
+              <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 20px; border-radius: 12px; border: 1px solid rgba(128, 0, 32, 0.1); box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                <div style="margin-bottom: 12px; font-size: 1rem;">
+                  <strong style="color: var(--primary-color);">Họ tên:</strong> 
+                  <span id="result-fullname" style="color: #333; margin-left: 8px;">-</span>
+                </div>
+                <div style="font-size: 1rem;">
+                  <strong style="color: var(--primary-color);">Đơn vị:</strong> 
+                  <span id="result-branch" style="color: #333; margin-left: 8px;">-</span>
+                </div>
+              </div>
             </div>
-            <div class="form-group">
-              <label for="branch">Đơn vị (tùy chọn)</label>
-              <input type="text" id="branch" name="branch" placeholder="Nhập đơn vị">
-            </div>
-          </form>
+          </div>
           
           <div class="result-actions">
-            <a href="index.html" class="btn">
-              <i class="material-icons">home</i> Về trang chủ
-            </a>
-            <button id="restart-btn" class="btn btn-outline">
-              <i class="material-icons">refresh</i> Làm lại
-            </button>
-            <button id="wrong-answers-btn" class="btn btn-outline">
-              <i class="material-icons">error_outline</i> Câu sai
-            </button>
-            <button id="leaderboard-btn" class="btn btn-outline">
-              <i class="material-icons">leaderboard</i> Bảng xếp hạng
-            </button>
+            <div class="result-actions-grid">
+              <a href="index.html" class="btn result-btn primary">
+                <i class="material-icons">home</i> Về trang chủ
+              </a>
+              <button id="restart-btn" class="btn btn-outline result-btn">
+                <i class="material-icons">refresh</i> Làm lại
+              </button>
+              <button id="wrong-answers-btn" class="btn btn-outline result-btn">
+                <i class="material-icons">error_outline</i> Câu sai
+              </button>
+              <button id="leaderboard-btn" class="btn btn-outline result-btn">
+                <i class="material-icons">leaderboard</i> Bảng xếp hạng
+              </button>
+            </div>
           </div>
         </div>
       `;
       resultArea.style.display = 'block';
+      
+      // Hiển thị thông tin người dùng
+      const resultFullnameEl = document.getElementById('result-fullname');
+      const resultBranchEl = document.getElementById('result-branch');
+      if (resultFullnameEl && userFullnameInput) {
+        const fullname = userFullnameInput.value.trim();
+        resultFullnameEl.textContent = fullname || 'Người dùng ẩn danh';
+      }
+      if (resultBranchEl && userBranchInput) {
+        const branch = userBranchInput.value.trim();
+        resultBranchEl.textContent = branch || 'Không xác định';
+      }
       
       // Attach event handlers once results are shown
       const restartBtn = document.getElementById('restart-btn');
@@ -1954,6 +2070,31 @@ function updateNextBtnStatus(){
       if (closeSessionModal) {
         closeSessionModal.addEventListener('click', () => {
           sessionModal.classList.add('hidden');
+        });
+      }
+      
+      // User info modal event listeners
+      if (closeUserInfoModal) {
+        closeUserInfoModal.addEventListener('click', () => {
+          userInfoModal.classList.add('hidden');
+        });
+      }
+      
+      if (cancelSubmitBtn) {
+        cancelSubmitBtn.addEventListener('click', () => {
+          userInfoModal.classList.add('hidden');
+        });
+      }
+      
+      if (confirmSubmitBtn) {
+        confirmSubmitBtn.addEventListener('click', confirmSubmitQuiz);
+      }
+      
+      // Allow Enter key to submit form
+      if (userInfoForm) {
+        userInfoForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          confirmSubmitQuiz();
         });
       }
       
