@@ -177,7 +177,7 @@ async function renderTopics() {
     if (gridContainer) gridContainer.innerHTML = '<div class="empty-state"><i class="material-icons">folder_open</i><p>Chưa có chuyên đề nào</p></div>';
     const eb = document.getElementById('exam-topic-percents');
     if (eb) eb.innerHTML = '<p>Chưa có chuyên đề để chọn.</p>';
-    renderExams([]);
+    await renderExams([]);
     return;
   }
   
@@ -211,8 +211,8 @@ async function renderTopics() {
     `).join('');
   }
 
-  renderExamBuilderTopics(normalTopics);
-  renderExams(exams);
+  await renderExamBuilderTopics(normalTopics);
+  await renderExams(exams);
 }
 
 function updateExamView(exam) {
@@ -246,7 +246,7 @@ function updateExamView(exam) {
   }
 }
 
-function renderExams(exams) {
+async function renderExams(exams) {
   const selector = document.getElementById('exam-selector');
   const detailContainer = document.getElementById('exam-detail-container');
   const gridContainer = document.getElementById('exam-list-container');
@@ -375,12 +375,12 @@ window.openEditExam = async function(examId) {
   document.getElementById('edit-exam-total').value = exam.examConfig?.total || (exam.questions?.length || 0);
   document.getElementById('edit-exam-duration').value = exam.durationMinutes || '';
   document.getElementById('edit-exam-allow-pause').checked = !!exam.allowPause;
-  renderEditExamTopics(topics.filter(t => !t.isExam), exam);
+  await renderEditExamTopics(topics.filter(t => !t.isExam), exam);
   document.getElementById('edit-exam-msg').textContent = '';
   document.getElementById('edit-exam-modal').classList.remove('hidden');
 }
 
-function renderEditExamTopics(allTopics, exam) {
+async function renderEditExamTopics(allTopics, exam) {
   const holder = document.getElementById('edit-exam-topic-percents');
   if (!holder) return;
   if (!allTopics || allTopics.length === 0) {
@@ -420,7 +420,7 @@ function renderEditExamTopics(allTopics, exam) {
   });
 }
 
-function saveEditExam(e) {
+async function saveEditExam(e) {
   e.preventDefault();
   const msg = document.getElementById('edit-exam-msg');
   msg.textContent = '';
@@ -461,7 +461,7 @@ function saveEditExam(e) {
   topics[idx].durationMinutes = durationMinutes;
   topics[idx].allowPause = allowPause;
   topics[idx].examConfig = { total, distribution: dist };
-  saveTopics(topics);
+  await saveTopics(topics);
   
   try { localStorage.removeItem(`quiz_exam_questions_${id}`); } catch(_) {}
   await renderTopics();
@@ -495,7 +495,7 @@ function shuffleArray(arr) {
   return arr;
 }
 
-function renderExamBuilderTopics(topics) {
+async function renderExamBuilderTopics(topics) {
   const holderDropdown = document.getElementById('exam-topic-percents');
   const holderGrid = document.getElementById('exam-topic-percents-grid');
   
@@ -1312,7 +1312,7 @@ function initializeViews() {
 }
 
 // Topic management functions
-function renderTopicItem(topic, container) {
+async function renderTopicItem(topic, container) {
   const topicEl = document.createElement('div');
   topicEl.className = 'topic-item';
   topicEl.dataset.id = topic.id;
@@ -1340,7 +1340,7 @@ function renderTopicItem(topic, container) {
   return topicEl;
 }
 
-function updateTopicView(topic) {
+async function updateTopicView(topic) {
   if (!topic) {
     document.getElementById('topic-detail-container').style.display = 'none';
     document.getElementById('edit-topic-btn').disabled = true;
@@ -1356,11 +1356,11 @@ function updateTopicView(topic) {
   
   // Store current topic ID in edit/delete buttons
   const topicId = topic.id;
-  document.getElementById('edit-topic-btn').onclick = () => openEditTopic(topicId);
-  document.getElementById('delete-topic-btn').onclick = () => delTopic(topicId);
+  document.getElementById('edit-topic-btn').onclick = async () => await openEditTopic(topicId);
+  document.getElementById('delete-topic-btn').onclick = async () => await delTopic(topicId);
 }
 
-function renderTopicDropdown(topics) {
+async function renderTopicDropdown(topics) {
   const selector = document.getElementById('topic-selector');
   selector.innerHTML = '<option value="">-- Chọn chuyên đề --</option>';
   
@@ -1371,14 +1371,14 @@ function renderTopicDropdown(topics) {
     selector.appendChild(option);
   });
   
-  selector.onchange = (e) => {
+  selector.onchange = async (e) => {
     const topicId = e.target.value;
     const topic = topics.find(t => t.id === topicId);
-    updateTopicView(topic);
+    await updateTopicView(topic);
   };
 }
 
-function renderTopicGrid(topics) {
+async function renderTopicGrid(topics) {
   const container = document.getElementById('topic-list-container');
   container.innerHTML = '';
   
@@ -1388,39 +1388,39 @@ function renderTopicGrid(topics) {
   }
   
   topics.forEach(topic => {
-    const topicEl = renderTopicItem(topic);
+    const topicEl = await renderTopicItem(topic);
     container.appendChild(topicEl);
     
     // Add event listeners for edit/delete buttons
-    topicEl.querySelector('.edit-topic').onclick = (e) => {
+    topicEl.querySelector('.edit-topic').onclick = async (e) => {
       e.stopPropagation();
-      openEditTopic(topic.id);
+      await openEditTopic(topic.id);
     };
     
-    topicEl.querySelector('.delete-topic').onclick = (e) => {
+    topicEl.querySelector('.delete-topic').onclick = async (e) => {
       e.stopPropagation();
-      delTopic(topic.id);
+      await delTopic(topic.id);
     };
     
-    topicEl.onclick = () => {
+    topicEl.onclick = async () => {
       // Toggle selection
       document.querySelectorAll('.topic-item').forEach(el => el.classList.remove('selected'));
       topicEl.classList.add('selected');
-      updateTopicView(topic);
+      await updateTopicView(topic);
     };
   });
 }
 
 // Initialize
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
   if (checkAuth()) {
-    showAdminPanel();
+    await showAdminPanel();
     initializeViews();
     
     // Initialize topic management
     const topics = await getTopics();
-    renderTopicDropdown(topics);
-    renderTopicGrid(topics);
+    await renderTopicDropdown(topics);
+    await renderTopicGrid(topics);
     
     // Add new topic button
     const addTopicBtn = document.getElementById('add-topic-btn');
@@ -1452,7 +1452,7 @@ document.addEventListener('DOMContentLoaded', function() {
           return;
         }
         
-        parseExcelFile(fileInput.files[0], (result) => {
+        parseExcelFile(fileInput.files[0], async (result) => {
           if (result.error) {
             msgEl.textContent = result.error;
             msgEl.className = 'ml-2 error';
@@ -1468,7 +1468,7 @@ document.addEventListener('DOMContentLoaded', function() {
           };
           
           topics.push(newTopic);
-          saveTopics(topics);
+          await saveTopics(topics);
           
           // Reset form
           topicForm.reset();
