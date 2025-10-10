@@ -100,19 +100,24 @@
     .modal .modal-header {
       background: linear-gradient(135deg, #800020 0%, #c72c41 100%);
       color: white;
-      padding: 24px 32px;
+      padding: 28px 32px;
       border-radius: 16px 16px 0 0;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 16px;
+      border-bottom: 3px solid rgba(255,255,255,0.3);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
     .modal .modal-header h3 {
       margin: 0;
-      font-size: 1.4rem;
-      font-weight: 600;
+      font-size: 1.6rem;
+      font-weight: 700;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      letter-spacing: 0.5px;
     }
     .modal .modal-header .material-icons {
-      font-size: 1.6rem;
+      font-size: 2rem;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
     .modal .modal-body {
       padding: 32px;
@@ -284,7 +289,8 @@
     }
     
     /* Custom checkbox styling for better cross-browser support */
-    .modal input[type="checkbox"] {
+    .modal input[type="checkbox"],
+    .topic-form input[type="checkbox"] {
       appearance: none;
       -webkit-appearance: none;
       -moz-appearance: none;
@@ -299,17 +305,20 @@
       flex-shrink: 0;
     }
     
-    .modal input[type="checkbox"]:hover {
+    .modal input[type="checkbox"]:hover,
+    .topic-form input[type="checkbox"]:hover {
       border-color: #800020;
       box-shadow: 0 0 0 2px rgba(128,0,32,0.1);
     }
     
-    .modal input[type="checkbox"]:checked {
+    .modal input[type="checkbox"]:checked,
+    .topic-form input[type="checkbox"]:checked {
       background: #800020;
       border-color: #800020;
     }
     
-    .modal input[type="checkbox"]:checked::after {
+    .modal input[type="checkbox"]:checked::after,
+    .topic-form input[type="checkbox"]:checked::after {
       content: '✓';
       position: absolute;
       top: 50%;
@@ -321,19 +330,22 @@
       line-height: 1;
     }
     
-    .modal input[type="checkbox"]:focus {
+    .modal input[type="checkbox"]:focus,
+    .topic-form input[type="checkbox"]:focus {
       outline: none;
       box-shadow: 0 0 0 3px rgba(128,0,32,0.2);
     }
     
     /* Override for form-group checkboxes */
-    .modal .form-group input[type="checkbox"] {
+    .modal .form-group input[type="checkbox"],
+    .topic-form input[type="checkbox"] {
       width: 18px;
       height: 18px;
-      margin-right: 8px;
+      margin: 0;
     }
     
-    .modal .form-group input[type="checkbox"]:checked::after {
+    .modal .form-group input[type="checkbox"]:checked::after,
+    .topic-form input[type="checkbox"]:checked::after {
       font-size: 12px;
     }
     
@@ -874,7 +886,7 @@
                 <input type="number" id="edit-exam-duration" min="1" step="1" required placeholder="VD: 30">
               </div>
               <div class="form-group">
-                <label for="edit-exam-allow-pause">
+                <label style="display: flex; align-items: center; gap: 8px; font-weight: 500; color: #495057;">
                   <input type="checkbox" id="edit-exam-allow-pause">
                   Cho phép tạm dừng (Pause/Resume)
                 </label>
@@ -926,11 +938,11 @@
             <input type="number" id="exam-duration" min="1" step="1" placeholder="VD: 30" required>
           </div>
           <div class="form-group">
-            <label style="display:flex; align-items:center; gap:8px;">
+            <label style="display: flex; align-items: center; gap: 8px; font-weight: 500; color: #495057; cursor: pointer;">
               <input type="checkbox" id="exam-allow-pause">
-              Cho phép tạm dừng (Pause/Resume)
+              <span>Cho phép tạm dừng (Pause/Resume)</span>
             </label>
-            <small>Khi bật, thí sinh có thể tạm dừng đồng hồ đếm ngược và tiếp tục sau đó.</small>
+            <small style="display: block; margin-top: 8px; color: #6c757d;">Khi bật, thí sinh có thể tạm dừng đồng hồ đếm ngược và tiếp tục sau đó.</small>
           </div>
           <div class="form-group">
             <label>Chọn chuyên đề và tỷ lệ (%) trên tổng số câu của bộ đề</label>
