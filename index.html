@@ -310,13 +310,307 @@
           }
         }
 
-        function clearWebStorage() {
+        async function clearWebStorage() {
           try {
             localStorage.clear();
             sessionStorage.clear();
-            alert('Đã xóa localStorage và sessionStorage.');
+            
+            // Clear IndexedDB as well
+            try {
+              await indexedDBStorage.clear();
+              console.log('IndexedDB cleared successfully');
+            } catch (dbError) {
+              console.warn('Could not clear IndexedDB:', dbError);
+            }
+            
+            alert('✅ Đã xóa tất cả dữ liệu lưu trữ:\n\n' +
+                  '• localStorage\n' +
+                  '• sessionStorage\n' +
+                  '• IndexedDB\n\n' +
+                  'Dung lượng đã được giải phóng hoàn toàn.');
           } catch (e) {
-            alert('Không thể xóa web storage: ' + (e && e.message ? e.message : e));
+            alert('❌ Không thể xóa web storage: ' + (e && e.message ? e.message : e));
+          }
+        }
+
+        // Kiểm tra dung lượng localStorage
+        function checkLocalStorageUsage() {
+          try {
+            let totalSize = 0;
+            for (let key in localStorage) {
+              if (localStorage.hasOwnProperty(key)) {
+                totalSize += localStorage[key].length + key.length;
+              }
+            }
+            
+            const sizeInMB = (totalSize / (1024 * 1024)).toFixed(2);
+            const quotaLimit = 5; // 5MB là giới hạn phổ biến
+            
+            console.log(`LocalStorage usage: ${sizeInMB}MB / ${quotaLimit}MB`);
+            
+            if (parseFloat(sizeInMB) > quotaLimit * 0.8) {
+              console.warn('LocalStorage đang sử dụng hơn 80% quota!');
+              return {
+                used: parseFloat(sizeInMB),
+                limit: quotaLimit,
+                percentage: (parseFloat(sizeInMB) / quotaLimit * 100).toFixed(1),
+                warning: parseFloat(sizeInMB) > quotaLimit * 0.8
+              };
+            }
+            
+            return {
+              used: parseFloat(sizeInMB),
+              limit: quotaLimit,
+              percentage: (parseFloat(sizeInMB) / quotaLimit * 100).toFixed(1),
+              warning: false
+            };
+          } catch (e) {
+            console.error('Error checking localStorage usage:', e);
+            return null;
+          }
+        }
+
+        // Xử lý lỗi QuotaExceededError
+        function handleQuotaExceededError(error, context = '') {
+          console.error(`QuotaExceededError in ${context}:`, error);
+          
+          const usage = checkLocalStorageUsage();
+          if (usage) {
+            alert(`⚠️ Lỗi vượt quá dung lượng lưu trữ!\n\n` +
+                  `Đã sử dụng: ${usage.used}MB / ${usage.limit}MB (${usage.percentage}%)\n\n` +
+                  `Vui lòng:\n` +
+                  `1. Nhấn "Xóa bộ nhớ" để giải phóng dung lượng\n` +
+                  `2. Hoặc xóa dữ liệu cũ trong thống kê\n` +
+                  `3. Liên hệ admin nếu vấn đề tiếp tục`);
+          } else {
+            alert(`⚠️ Lỗi vượt quá dung lượng lưu trữ!\n\n` +
+                  `Vui lòng nhấn "Xóa bộ nhớ" để giải phóng dung lượng.`);
+          }
+        }
+
+        // Nén dữ liệu trước khi lưu (đơn giản)
+        function compressData(data) {
+          try {
+            // Loại bỏ khoảng trắng thừa và nén JSON
+            return JSON.stringify(JSON.parse(JSON.stringify(data)));
+          } catch (e) {
+            return data;
+          }
+        }
+
+        // Giải nén dữ liệu
+        function decompressData(compressedData) {
+          try {
+            return JSON.parse(compressedData);
+          } catch (e) {
+            return compressedData;
+          }
+        }
+
+        // Xóa dữ liệu cũ tự động
+        function cleanupOldData() {
+          try {
+            const now = Date.now();
+            const maxAge = 30 * 24 * 60 * 60 * 1000; // 30 ngày
+            
+            // Xóa thống kê cũ
+            const stats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
+            const recentStats = stats.filter(stat => {
+              const statTime = new Date(stat.timestamp).getTime();
+              return (now - statTime) < maxAge;
+            });
+            
+            if (recentStats.length < stats.length) {
+              localStorage.setItem('quiz_statistics', JSON.stringify(recentStats));
+              console.log(`Cleaned up ${stats.length - recentStats.length} old statistics`);
+            }
+            
+            // Xóa câu sai cũ
+            const wrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
+            const recentWrongAnswers = wrongAnswers.filter(answer => {
+              const answerTime = new Date(answer.timestamp).getTime();
+              return (now - answerTime) < maxAge;
+            });
+            
+            if (recentWrongAnswers.length < wrongAnswers.length) {
+              localStorage.setItem('wrong_answers', JSON.stringify(recentWrongAnswers));
+              console.log(`Cleaned up ${wrongAnswers.length - recentWrongAnswers.length} old wrong answers`);
+            }
+            
+            return {
+              statsRemoved: stats.length - recentStats.length,
+              wrongAnswersRemoved: wrongAnswers.length - recentWrongAnswers.length
+            };
+          } catch (e) {
+            console.error('Error cleaning up old data:', e);
+            return null;
+          }
+        }
+
+        // Wrapper function để lưu dữ liệu an toàn với tối ưu hóa
+        function safeLocalStorageSet(key, value, options = {}) {
+          try {
+            let dataToStore = value;
+            
+            // Nén dữ liệu nếu được yêu cầu
+            if (options.compress !== false) {
+              dataToStore = compressData(value);
+            }
+            
+            localStorage.setItem(key, dataToStore);
+            return true;
+          } catch (error) {
+            if (error.name === 'QuotaExceededError') {
+              // Thử dọn dẹp dữ liệu cũ trước
+              const cleanupResult = cleanupOldData();
+              if (cleanupResult) {
+                console.log('Cleaned up old data, retrying save...');
+                try {
+                  localStorage.setItem(key, dataToStore);
+                  return true;
+                } catch (retryError) {
+                  handleQuotaExceededError(retryError, `saving ${key} after cleanup`);
+                  return false;
+                }
+              } else {
+                handleQuotaExceededError(error, `saving ${key}`);
+                return false;
+              }
+            }
+            throw error;
+          }
+        }
+
+        // Lưu dữ liệu với tối ưu hóa
+        function optimizedLocalStorageSet(key, value) {
+          return safeLocalStorageSet(key, value, { compress: true });
+        }
+
+        // IndexedDB để lưu trữ dữ liệu lớn
+        class IndexedDBStorage {
+          constructor() {
+            this.dbName = 'QuizStorageDB';
+            this.version = 1;
+            this.db = null;
+          }
+
+          async init() {
+            return new Promise((resolve, reject) => {
+              const request = indexedDB.open(this.dbName, this.version);
+              
+              request.onerror = () => reject(request.error);
+              request.onsuccess = () => {
+                this.db = request.result;
+                resolve(this.db);
+              };
+              
+              request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains('quizData')) {
+                  db.createObjectStore('quizData', { keyPath: 'key' });
+                }
+              };
+            });
+          }
+
+          async setItem(key, value) {
+            if (!this.db) await this.init();
+            
+            return new Promise((resolve, reject) => {
+              const transaction = this.db.transaction(['quizData'], 'readwrite');
+              const store = transaction.objectStore('quizData');
+              const request = store.put({ key, value, timestamp: Date.now() });
+              
+              request.onsuccess = () => resolve(true);
+              request.onerror = () => reject(request.error);
+            });
+          }
+
+          async getItem(key) {
+            if (!this.db) await this.init();
+            
+            return new Promise((resolve, reject) => {
+              const transaction = this.db.transaction(['quizData'], 'readonly');
+              const store = transaction.objectStore('quizData');
+              const request = store.get(key);
+              
+              request.onsuccess = () => {
+                resolve(request.result ? request.result.value : null);
+              };
+              request.onerror = () => reject(request.error);
+            });
+          }
+
+          async removeItem(key) {
+            if (!this.db) await this.init();
+            
+            return new Promise((resolve, reject) => {
+              const transaction = this.db.transaction(['quizData'], 'readwrite');
+              const store = transaction.objectStore('quizData');
+              const request = store.delete(key);
+              
+              request.onsuccess = () => resolve(true);
+              request.onerror = () => reject(request.error);
+            });
+          }
+
+          async clear() {
+            if (!this.db) await this.init();
+            
+            return new Promise((resolve, reject) => {
+              const transaction = this.db.transaction(['quizData'], 'readwrite');
+              const store = transaction.objectStore('quizData');
+              const request = store.clear();
+              
+              request.onsuccess = () => resolve(true);
+              request.onerror = () => reject(request.error);
+            });
+          }
+        }
+
+        // Khởi tạo IndexedDB storage
+        const indexedDBStorage = new IndexedDBStorage();
+
+        // Hybrid storage: localStorage + IndexedDB
+        async function hybridStorageSet(key, value) {
+          try {
+            // Thử localStorage trước
+            if (safeLocalStorageSet(key, value)) {
+              return true;
+            }
+          } catch (e) {
+            console.log('localStorage failed, trying IndexedDB...');
+          }
+          
+          try {
+            // Fallback to IndexedDB
+            await indexedDBStorage.setItem(key, value);
+            console.log(`Data saved to IndexedDB: ${key}`);
+            return true;
+          } catch (e) {
+            console.error('Both localStorage and IndexedDB failed:', e);
+            return false;
+          }
+        }
+
+        async function hybridStorageGet(key) {
+          try {
+            // Thử localStorage trước
+            const localData = localStorage.getItem(key);
+            if (localData) {
+              return localData;
+            }
+          } catch (e) {
+            console.log('localStorage read failed, trying IndexedDB...');
+          }
+          
+          try {
+            // Fallback to IndexedDB
+            const indexedData = await indexedDBStorage.getItem(key);
+            return indexedData;
+          } catch (e) {
+            console.error('Both localStorage and IndexedDB read failed:', e);
+            return null;
           }
         }
 
@@ -325,8 +619,135 @@
         }
 
         if (clearStorageBtn) {
-          clearStorageBtn.addEventListener('click', clearWebStorage);
+          clearStorageBtn.addEventListener('click', async function() {
+            if (confirm('⚠️ Bạn có chắc muốn xóa TẤT CẢ dữ liệu lưu trữ?\n\n' +
+                        'Điều này sẽ xóa:\n' +
+                        '• Tất cả chuyên đề đã tải\n' +
+                        '• Tất cả thống kê\n' +
+                        '• Tất cả câu trả lời sai\n' +
+                        '• Tất cả dữ liệu khác\n\n' +
+                        'KHÔNG THỂ HOÀN TÁC!')) {
+              await clearWebStorage();
+            }
+          });
         }
+
+        // Thêm nút kiểm tra dung lượng localStorage
+        const checkStorageBtn = document.createElement('button');
+        checkStorageBtn.innerHTML = '<i class="material-icons">storage</i> Kiểm tra dung lượng';
+        checkStorageBtn.className = 'btn btn-outline admin-btn';
+        checkStorageBtn.style.marginTop = '10px';
+        checkStorageBtn.addEventListener('click', function() {
+          const usage = checkLocalStorageUsage();
+          if (usage) {
+            const status = usage.warning ? '⚠️ CẢNH BÁO' : '✅ Bình thường';
+            const color = usage.warning ? '#ff9800' : '#4caf50';
+            
+            alert(`${status}\n\n` +
+                  `Dung lượng đã sử dụng: ${usage.used}MB\n` +
+                  `Giới hạn: ${usage.limit}MB\n` +
+                  `Tỷ lệ sử dụng: ${usage.percentage}%\n\n` +
+                  `${usage.warning ? 'Khuyến nghị: Xóa dữ liệu cũ để giải phóng dung lượng.' : 'Dung lượng sử dụng trong giới hạn an toàn.'}`);
+          } else {
+            alert('Không thể kiểm tra dung lượng localStorage.');
+          }
+        });
+        document.querySelector('.admin-buttons-grid').appendChild(checkStorageBtn);
+
+        // Thêm nút dọn dẹp dữ liệu cũ
+        const cleanupBtn = document.createElement('button');
+        cleanupBtn.innerHTML = '<i class="material-icons">cleaning_services</i> Dọn dẹp dữ liệu cũ';
+        cleanupBtn.className = 'btn btn-outline admin-btn';
+        cleanupBtn.style.marginTop = '10px';
+        cleanupBtn.addEventListener('click', async function() {
+          if (confirm('Bạn có chắc muốn dọn dẹp dữ liệu cũ hơn 30 ngày?\n\nHành động này sẽ xóa:\n- Thống kê cũ\n- Câu trả lời sai cũ\n\nKhông thể hoàn tác!')) {
+            const result = cleanupOldData();
+            if (result) {
+              alert(`✅ Dọn dẹp hoàn tất!\n\n` +
+                    `Đã xóa:\n` +
+                    `- ${result.statsRemoved} thống kê cũ\n` +
+                    `- ${result.wrongAnswersRemoved} câu trả lời sai cũ\n\n` +
+                    `Dung lượng đã được giải phóng.`);
+            } else {
+              alert('❌ Không thể dọn dẹp dữ liệu cũ.');
+            }
+          }
+        });
+        document.querySelector('.admin-buttons-grid').appendChild(cleanupBtn);
+
+        // Thêm nút export dữ liệu
+        const exportDataBtn = document.createElement('button');
+        exportDataBtn.innerHTML = '<i class="material-icons">file_download</i> Export dữ liệu';
+        exportDataBtn.className = 'btn btn-outline admin-btn';
+        exportDataBtn.style.marginTop = '10px';
+        exportDataBtn.addEventListener('click', function() {
+          try {
+            const allData = {
+              quiz_topics: JSON.parse(localStorage.getItem('quiz_topics') || '[]'),
+              quiz_statistics: JSON.parse(localStorage.getItem('quiz_statistics') || '[]'),
+              wrong_answers: JSON.parse(localStorage.getItem('wrong_answers') || '[]'),
+              exportDate: new Date().toISOString(),
+              version: '1.0'
+            };
+            
+            const dataStr = JSON.stringify(allData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `quiz-backup-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            
+            URL.revokeObjectURL(url);
+            alert('✅ Dữ liệu đã được export thành công!');
+          } catch (e) {
+            alert('❌ Không thể export dữ liệu: ' + e.message);
+          }
+        });
+        document.querySelector('.admin-buttons-grid').appendChild(exportDataBtn);
+
+        // Thêm nút import dữ liệu
+        const importDataBtn = document.createElement('button');
+        importDataBtn.innerHTML = '<i class="material-icons">file_upload</i> Import dữ liệu';
+        importDataBtn.className = 'btn btn-outline admin-btn';
+        importDataBtn.style.marginTop = '10px';
+        importDataBtn.addEventListener('click', function() {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.json';
+          input.onchange = function(e) {
+            const file = e.target.files[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = function(e) {
+                try {
+                  const data = JSON.parse(e.target.result);
+                  
+                  if (confirm(`Bạn có chắc muốn import dữ liệu?\n\n` +
+                             `Dữ liệu hiện tại sẽ được thay thế bởi:\n` +
+                             `- ${data.quiz_topics?.length || 0} chuyên đề\n` +
+                             `- ${data.quiz_statistics?.length || 0} thống kê\n` +
+                             `- ${data.wrong_answers?.length || 0} câu sai\n\n` +
+                             `Không thể hoàn tác!`)) {
+                    
+                    if (data.quiz_topics) localStorage.setItem('quiz_topics', JSON.stringify(data.quiz_topics));
+                    if (data.quiz_statistics) localStorage.setItem('quiz_statistics', JSON.stringify(data.quiz_statistics));
+                    if (data.wrong_answers) localStorage.setItem('wrong_answers', JSON.stringify(data.wrong_answers));
+                    
+                    alert('✅ Dữ liệu đã được import thành công!\n\nVui lòng tải lại trang để áp dụng thay đổi.');
+                    window.location.reload();
+                  }
+                } catch (e) {
+                  alert('❌ File không hợp lệ: ' + e.message);
+                }
+              };
+              reader.readAsText(file);
+            }
+          };
+          input.click();
+        });
+        document.querySelector('.admin-buttons-grid').appendChild(importDataBtn);
 
         if (refreshDataBtn) {
           refreshDataBtn.addEventListener('click', function() {
@@ -1129,21 +1550,27 @@
           console.log('Loading topics...');
           showLoadingState();
           
-          // Try to load from localStorage first
+          // Try to load from hybrid storage first
           try {
-            const localTopicsStr = localStorage.getItem('quiz_topics');
+            const localTopicsStr = await hybridStorageGet('quiz_topics');
             if (localTopicsStr) {
               const localTopics = JSON.parse(localTopicsStr);
               if (Array.isArray(localTopics) && localTopics.length > 0) {
-                console.log('Loaded topics from localStorage:', localTopics.length);
+                console.log('Loaded topics from storage:', localTopics.length);
                 hideLoadingState();
                 renderLists(localTopics);
                 return;
               }
             }
           } catch (e) {
-            console.warn('Error loading from localStorage:', e);
-            localStorage.removeItem('quiz_topics'); // Clear corrupted data
+            console.warn('Error loading from storage:', e);
+            // Clear corrupted data from both storages
+            localStorage.removeItem('quiz_topics');
+            try {
+              await indexedDBStorage.removeItem('quiz_topics');
+            } catch (dbError) {
+              console.warn('Could not clear IndexedDB:', dbError);
+            }
           }
           
           // Try to load from remote with multiple fallback strategies
@@ -1183,11 +1610,10 @@
                   );
                   
                   if (validTopics.length > 0) {
-                    try {
-                      localStorage.setItem('quiz_topics', JSON.stringify(validTopics));
-                      console.log('Valid topics saved to localStorage:', validTopics.length);
-                    } catch (storageError) {
-                      console.warn('Could not save to localStorage:', storageError);
+                    if (!(await hybridStorageSet('quiz_topics', JSON.stringify(validTopics)))) {
+                      console.warn('Could not save topics to any storage');
+                    } else {
+                      console.log('Valid topics saved to storage:', validTopics.length);
                     }
                     hideLoadingState();
                     renderLists(validTopics);
@@ -1883,11 +2309,50 @@
 
   </div>
   
-  <footer class="footer-copyright" style="text-align: center; padding: 20px; margin-top: 40px; background: #f8f6f8; border-top: 1px solid #eee; color: #800020;">
-    <strong>Bản quyền © 2025 Hệ thống ôn luyện trắc nghiệm Cần Thơ II.</strong><br>  
-    Liên hệ: Nguyễn Thành Trung
-    📱 Cellphone: 0947.86.86.82
-    📧 Email: trungnguyenthanh1@agribank.com.vn
+  <footer style="background: linear-gradient(135deg, #8e0e00 0%, #1f1c18 100%); color: #fff; padding: 40px 20px 20px; margin-top: 60px; position: relative; overflow: hidden;">
+    <div style="max-width: 1200px; margin: 0 auto; position: relative; z-index: 1;">
+      <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 40px; margin-bottom: 30px;" class="footer-content">
+        <div style="flex: 1; min-width: 300px;">
+          <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
+            <img src="logo.png" alt="Logo" style="width: 70px; height: 70px; object-fit: contain; filter: brightness(0) invert(1);">
+            <div>
+              <h3 style="font-size: 1.1em; margin: 0 0 5px; color: #fff; font-weight: 600;">Hệ thống ôn luyện trắc nghiệm</h3>
+              <p style="margin: 0; color: rgba(255, 255, 255, 0.8); font-size: 0.95em;">Chi nhánh Cần Thơ II</p>
+            </div>
+          </div>
+          <p style="color: rgba(255, 255, 255, 0.8); line-height: 1.6; margin: 0;">
+            Hệ thống hỗ trợ học tập và đánh giá kiến thức thông qua các bài thi trắc nghiệm trực tuyến. 
+            Được thiết kế để mang lại trải nghiệm học tập hiệu quả và tiện lợi.
+          </p>
+        </div>
+        
+        <div style="background: rgba(255, 255, 255, 0.05); padding: 25px; border-radius: 8px; min-width: 300px; backdrop-filter: blur(5px); border: 1px solid rgba(255, 255, 255, 0.1);">
+          <h4 style="color: #fff; margin-top: 0; margin-bottom: 20px; font-size: 1.3em; padding-bottom: 10px; border-bottom: 2px solid #800020; display: inline-block;">Liên hệ hỗ trợ</h4>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; color: rgba(255, 255, 255, 0.9); padding: 8px 12px; border-radius: 6px; transition: all 0.3s ease;">
+            <i class="material-icons" style="color: #800020; font-size: 1.2em; min-width: 24px; text-align: center;">person</i>
+            <span>Nguyễn Thành Trung</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; color: rgba(255, 255, 255, 0.9); padding: 8px 12px; border-radius: 6px; transition: all 0.3s ease;">
+            <i class="material-icons" style="color: #800020; font-size: 1.2em; min-width: 24px; text-align: center;">phone</i>
+            <span>0947.86.86.82</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; color: rgba(255, 255, 255, 0.9); padding: 8px 12px; border-radius: 6px; transition: all 0.3s ease;">
+            <i class="material-icons" style="color: #800020; font-size: 1.2em; min-width: 24px; text-align: center;">email</i>
+            <span>trungnguyenthanh1@agribank.com.vn</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; color: rgba(255, 255, 255, 0.9); padding: 8px 12px; border-radius: 6px; transition: all 0.3s ease;">
+            <i class="material-icons" style="color: #800020; font-size: 1.2em; min-width: 24px; text-align: center;">business</i>
+            <span>Agribank Chi nhánh Cần Thơ II</span>
+          </div>
+        </div>
+      </div>
+      
+      <div style="text-align: center; padding-top: 25px; margin-top: 25px; border-top: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.6); font-size: 0.9em;">
+        <strong>Bản quyền © 2025 Hệ thống ôn luyện trắc nghiệm Cần Thơ II.</strong><br>
+        Tất cả quyền được bảo lưu. Hệ thống được phát triển bởi đội ngũ IT Agribank.
+      </div>
+    </div>
+    <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: #800020;"></div>
   </footer>
   
   <script src="mobile-touch.js"></script>

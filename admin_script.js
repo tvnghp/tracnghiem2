@@ -26,10 +26,10 @@ function handleLogout() {
   showLoginForm();
 }
 
-function showAdminPanel() {
+async function showAdminPanel() {
   document.getElementById('login-container').style.display = 'none';
   document.getElementById('admin-container').style.display = 'block';
-  renderTopics();
+  await renderTopics();
 }
 
 function showLoginForm() {
@@ -38,12 +38,27 @@ function showLoginForm() {
   document.getElementById('login-form').reset();
 }
 
-function getTopics() {
-  return JSON.parse(localStorage.getItem('quiz_topics') || '[]');
+async function getTopics() {
+  try {
+    const topicsStr = await hybridStorageGet('quiz_topics');
+    return JSON.parse(topicsStr || '[]');
+  } catch (error) {
+    console.error('Error getting topics:', error);
+    return JSON.parse(localStorage.getItem('quiz_topics') || '[]');
+  }
 }
 
-function saveTopics(topics) {
-  localStorage.setItem('quiz_topics', JSON.stringify(topics));
+async function saveTopics(topics) {
+  try {
+    // Sử dụng hybrid storage để lưu
+    const success = await hybridStorageSet('quiz_topics', JSON.stringify(topics));
+    if (!success) {
+      throw new Error('Failed to save topics to storage');
+    }
+  } catch (error) {
+    console.error('Error saving topics:', error);
+    throw error;
+  }
 }
 
 function uuid() {
@@ -150,8 +165,8 @@ function parseExcelFile(file, callback) {
   reader.readAsBinaryString(file);
 }
 
-function renderTopics() {
-  const topics = getTopics();
+async function renderTopics() {
+  const topics = await getTopics();
   const selector = document.getElementById('topic-selector');
   const detailContainer = document.getElementById('topic-detail-container');
   const gridContainer = document.getElementById('topic-list-container');
@@ -292,8 +307,8 @@ function renderExams(exams) {
 }
 
 // ===== Edit Topic Logic =====
-window.openEditTopic = function(topicId) {
-  const topics = getTopics();
+window.openEditTopic = async function(topicId) {
+  const topics = await getTopics();
   const topic = topics.find(t => t.id === topicId && !t.isExam);
   if (!topic) return;
   
@@ -304,7 +319,7 @@ window.openEditTopic = function(topicId) {
   document.getElementById('edit-topic-modal').classList.remove('hidden');
 }
 
-function saveEditTopic(e) {
+async function saveEditTopic(e) {
   e.preventDefault();
   const msg = document.getElementById('edit-topic-msg');
   msg.textContent = '';
@@ -318,7 +333,7 @@ function saveEditTopic(e) {
     return;
   }
   
-  const topics = getTopics();
+  const topics = await getTopics();
   const idx = topics.findIndex(t => t.id === id && !t.isExam);
   if (idx === -1) {
     msg.textContent = 'Không tìm thấy chuyên đề!';
@@ -329,29 +344,29 @@ function saveEditTopic(e) {
   if (!file) {
     // Chỉ đổi tên
     topics[idx].name = name;
-    saveTopics(topics);
-    renderTopics();
+    await saveTopics(topics);
+    await renderTopics();
     document.getElementById('edit-topic-modal').classList.add('hidden');
     return;
   }
   
   // Đổi tên + thay câu hỏi
-  parseExcelFile(file, (result) => {
+  parseExcelFile(file, async (result) => {
     if (result.error) {
       msg.textContent = result.error;
       return;
     }
     topics[idx].name = name;
     topics[idx].questions = result.questions;
-    saveTopics(topics);
-    renderTopics();
+    await saveTopics(topics);
+    await renderTopics();
     document.getElementById('edit-topic-modal').classList.add('hidden');
   });
 }
 
 // ===== Edit Exam Logic =====
-window.openEditExam = function(examId) {
-  const topics = getTopics();
+window.openEditExam = async function(examId) {
+  const topics = await getTopics();
   const exam = topics.find(t => t.id === examId && t.isExam);
   if (!exam) return;
   
@@ -438,7 +453,7 @@ function saveEditExam(e) {
   }
   if (Math.round(sumPercent) !== 100) { msg.textContent = 'Tổng tỷ lệ phải bằng 100%'; return; }
 
-  const topics = getTopics();
+  const topics = await getTopics();
   const idx = topics.findIndex(t => t.id === id && t.isExam);
   if (idx === -1) { msg.textContent = 'Không tìm thấy bài thi!'; return; }
   
@@ -449,16 +464,16 @@ function saveEditExam(e) {
   saveTopics(topics);
   
   try { localStorage.removeItem(`quiz_exam_questions_${id}`); } catch(_) {}
-  renderTopics();
+  await renderTopics();
   document.getElementById('edit-exam-modal').classList.add('hidden');
 }
 
-window.delTopic = function(id) {
+window.delTopic = async function(id) {
   if (!confirm('Bạn có chắc chắn muốn xóa chuyên đề này?')) return;
-  const all = getTopics();
+  const all = await getTopics();
   const removed = all.find(topic => topic.id === id);
   const topics = all.filter(topic => topic.id !== id);
-  saveTopics(topics);
+  await saveTopics(topics);
   if (removed && removed.isExam === true) {
     try { localStorage.removeItem(`quiz_exam_questions_${id}`); } catch(_) {}
   }
@@ -469,7 +484,7 @@ window.delTopic = function(id) {
   document.getElementById('topic-detail-container').style.display = 'none';
   document.getElementById('exam-detail-container').style.display = 'none';
   
-  renderTopics();
+  await renderTopics();
 };
 
 function shuffleArray(arr) {
@@ -892,7 +907,7 @@ function normalizePercents(scopeEl, viewType = 'dropdown') {
   if (lastInp) lastInp.value = String(remain);
 }
 
-function buildCompositeExam(e) {
+async function buildCompositeExam(e) {
   e.preventDefault();
   const msg = document.getElementById('exam-builder-msg');
   msg.textContent = '';
@@ -901,7 +916,7 @@ function buildCompositeExam(e) {
   const total = parseInt(document.getElementById('exam-total').value, 10);
   const durationMinutes = parseInt(document.getElementById('exam-duration').value, 10);
   const allowPause = !!document.getElementById('exam-allow-pause').checked;
-  const allTopics = getTopics();
+  const allTopics = await getTopics();
 
   if (!name) { msg.textContent = 'Vui lòng nhập tên bộ đề!'; return; }
   if (!Number.isFinite(total) || total <= 0) { msg.textContent = 'Tổng số câu hỏi phải là số > 0!'; return; }
@@ -1031,24 +1046,53 @@ function buildCompositeExam(e) {
 
   const topics = allTopics.slice();
   const examConfig = { total: total, distribution: dist };
-  topics.push({ 
+  
+  // Tạo bài thi với câu hỏi tối thiểu để tránh quota exceeded
+  const examTopic = { 
     id: uuid(), 
     name: name, 
     isExam: true, 
     examConfig: examConfig, 
-    questions: combined, 
+    questions: [], // Không lưu câu hỏi trực tiếp, sẽ tạo động
     durationMinutes: durationMinutes, 
     allowPause: allowPause 
-  });
-  saveTopics(topics);
-  renderTopics();
+  };
+  
+  topics.push(examTopic);
+  
+  // Sử dụng hybrid storage để lưu
+  try {
+    await saveTopics(topics);
+    console.log('Exam created successfully with hybrid storage');
+  } catch (error) {
+    if (error.name === 'QuotaExceededError') {
+      // Thử dọn dẹp dữ liệu cũ trước
+      console.log('Quota exceeded, cleaning up old data...');
+      if (typeof cleanupOldData === 'function') {
+        cleanupOldData();
+      }
+      
+      // Thử lại
+      try {
+        await saveTopics(topics);
+        console.log('Exam created after cleanup');
+      } catch (retryError) {
+        msg.textContent = 'Lỗi: Dung lượng lưu trữ đầy! Vui lòng xóa dữ liệu cũ hoặc giảm số câu hỏi.';
+        return;
+      }
+    } else {
+      msg.textContent = 'Lỗi tạo bài thi: ' + error.message;
+      return;
+    }
+  }
+  await renderTopics();
   document.getElementById('exam-builder-form').reset();
   msg.textContent = 'Tạo bộ đề thành công!';
   setTimeout(() => { msg.textContent = ''; }, 2000);
 }
 
-function exportTopicsJson() {
-  const topics = getTopics();
+async function exportTopicsJson() {
+  const topics = await getTopics();
   const blob = new Blob([JSON.stringify(topics, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1065,12 +1109,12 @@ function importTopicsJson() {
   fileInput.click();
 }
 
-function handleImportFile(e) {
+async function handleImportFile(e) {
   const file = e.target.files[0];
   if (!file) return;
   
   const reader = new FileReader();
-  reader.onload = function(evt) {
+  reader.onload = async function(evt) {
     try {
       const data = JSON.parse(evt.target.result);
       
@@ -1098,8 +1142,8 @@ function handleImportFile(e) {
       if (!confirm(confirmMsg)) return;
       
       // Save to localStorage
-      saveTopics(data);
-      renderTopics();
+      await saveTopics(data);
+      await renderTopics();
       alert(`Đã import thành công ${data.length} chuyên đề/bài thi!`);
       
     } catch (err) {
@@ -1374,7 +1418,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeViews();
     
     // Initialize topic management
-    const topics = getTopics();
+    const topics = await getTopics();
     renderTopicDropdown(topics);
     renderTopicGrid(topics);
     
@@ -1415,7 +1459,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
           }
           
-          const topics = getTopics();
+          const topics = await getTopics();
           const newTopic = {
             id: uuid(),
             name: topicName,
@@ -1432,7 +1476,7 @@ document.addEventListener('DOMContentLoaded', function() {
           msgEl.className = 'ml-2 success';
           
           // Refresh views
-          renderTopics();
+          await renderTopics();
           
           setTimeout(() => {
             msgEl.textContent = '';
@@ -1465,7 +1509,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Topic selector change handler
   const topicSelector = document.getElementById('topic-selector');
-  if (topicSelector) topicSelector.addEventListener('change', function(e) {
+  if (topicSelector) topicSelector.addEventListener('change', async function(e) {
     const topicId = e.target.value;
     const detailContainer = document.getElementById('topic-detail-container');
     const detailDiv = document.getElementById('selected-topic-detail');
@@ -1475,7 +1519,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
-    const topics = getTopics();
+    const topics = await getTopics();
     const topic = topics.find(t => t.id === topicId && !t.isExam);
     
     if (topic) {
@@ -1499,7 +1543,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Exam selector change handler
   const examSelector = document.getElementById('exam-selector');
-  if (examSelector) examSelector.addEventListener('change', function(e) {
+  if (examSelector) examSelector.addEventListener('change', async function(e) {
     const examId = e.target.value;
     const detailContainer = document.getElementById('exam-detail-container');
     const detailDiv = document.getElementById('selected-exam-detail');
@@ -1509,7 +1553,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
-    const topics = getTopics();
+    const topics = await getTopics();
     const exam = topics.find(t => t.id === examId && t.isExam);
     
     if (exam) {
@@ -1537,7 +1581,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Topic form
   const topicFormSubmit = document.getElementById('topic-form');
-  if (topicFormSubmit) topicFormSubmit.addEventListener('submit', function(e) {
+  if (topicFormSubmit) topicFormSubmit.addEventListener('submit', async function(e) {
     e.preventDefault();
     const name = document.getElementById('topic-name').value.trim();
     const fileInput = document.getElementById('file-quiz');
@@ -1548,20 +1592,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const file = fileInput.files[0];
     if (!file) { msg.textContent = "Vui lòng chọn file câu hỏi!"; return; }
     
-    parseExcelFile(file, (result) => {
+    parseExcelFile(file, async (result) => {
       if (result.error) {
         msg.textContent = result.error;
         return;
       }
       
-      const topics = getTopics();
+      const topics = await getTopics();
       topics.push({
         id: uuid(),
         name: name,
         questions: result.questions
       });
-      saveTopics(topics);
-      renderTopics();
+      await saveTopics(topics);
+      await renderTopics();
       document.getElementById('topic-form').reset();
       msg.textContent = "Tạo chuyên đề thành công!";
       setTimeout(() => { msg.textContent = ''; }, 2000);
@@ -1570,7 +1614,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Edit Topic modal handlers
   const editTopicForm = document.getElementById('edit-topic-form');
-  if (editTopicForm) editTopicForm.addEventListener('submit', saveEditTopic);
+  if (editTopicForm) editTopicForm.addEventListener('submit', async (e) => await saveEditTopic(e));
   
   const editTopicCancel = document.getElementById('edit-topic-cancel');
   if (editTopicCancel) editTopicCancel.addEventListener('click', () => {
@@ -1579,7 +1623,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Edit Exam modal handlers
   const editExamForm = document.getElementById('edit-exam-form');
-  if (editExamForm) editExamForm.addEventListener('submit', saveEditExam);
+  if (editExamForm) editExamForm.addEventListener('submit', async (e) => await saveEditExam(e));
   
   const editExamCancel = document.getElementById('edit-exam-cancel');
   if (editExamCancel) editExamCancel.addEventListener('click', () => {
@@ -1588,17 +1632,17 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Exam Builder
   const examBuilderForm = document.getElementById('exam-builder-form');
-  if (examBuilderForm) examBuilderForm.addEventListener('submit', buildCompositeExam);
+  if (examBuilderForm) examBuilderForm.addEventListener('submit', async (e) => await buildCompositeExam(e));
   
   // Export
   const exportBtn = document.getElementById('export-json-btn');
-  if (exportBtn) exportBtn.addEventListener('click', exportTopicsJson);
+  if (exportBtn) exportBtn.addEventListener('click', async () => await exportTopicsJson());
   // Import
   const importBtn = document.getElementById('import-json-btn');
   if (importBtn) importBtn.addEventListener('click', importTopicsJson);
   
   const importFileInput = document.getElementById('import-json-file');
-  if (importFileInput) importFileInput.addEventListener('change', handleImportFile);
+  if (importFileInput) importFileInput.addEventListener('change', async (e) => await handleImportFile(e));
   
   // Test Google Sheets connection
   const testGoogleSheetsBtn = document.getElementById('test-google-sheets-btn');
