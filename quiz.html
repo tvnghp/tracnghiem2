@@ -843,7 +843,7 @@ async function continueInitQuiz() {
       if (resp.ok) {
         const remoteTopics = await resp.json();
         if (Array.isArray(remoteTopics) && remoteTopics.length > 0) {
-          localStorage.setItem('quiz_topics', JSON.stringify(remoteTopics));
+          await hybridStorageSet('quiz_topics', JSON.stringify(remoteTopics));
           topics = remoteTopics;
           topic = topics.find(t => t.id === topicId);
         }
@@ -905,7 +905,7 @@ async function continueInitQuiz() {
   updateQuestionList();
 
   // Initialize countdown timer (use topic duration or ask user)
-  const effectiveMinutes = getEffectiveDurationMinutes();
+  const effectiveMinutes = await getEffectiveDurationMinutes();
   if (effectiveMinutes > 0) {
     startOrResumeTimer(effectiveMinutes);
   } else if (timerEl) {
@@ -966,14 +966,14 @@ async function continueInitQuiz() {
       }
     }
 
-    function saveProgress() {
+    async function saveProgress() {
       const progress = {
         answers: userAnswers,
         currentIndex: currentQuestionIndex,
         quizSubmitted: quizSubmitted,
         timestamp: new Date().toISOString()
       };
-      localStorage.setItem(`quiz_progress_${topicId}`, JSON.stringify(progress));
+      await hybridStorageSet(`quiz_progress_${topicId}`, JSON.stringify(progress));
     }
 
     // ===== Exam assembly per attempt =====
@@ -1045,7 +1045,7 @@ async function continueInitQuiz() {
 
     // Determine duration: Only exams have/ask for duration.
     // Prefer topic.durationMinutes; if missing and this IS an exam, ask once and cache.
-    function getEffectiveDurationMinutes() {
+    async function getEffectiveDurationMinutes() {
       if (typeof topic.durationMinutes === 'number' && topic.durationMinutes > 0) {
         return topic.durationMinutes;
       }
@@ -1060,7 +1060,7 @@ async function continueInitQuiz() {
           if (input === null) return 0; // user canceled
           minutes = parseInt(input, 10);
           if (!Number.isFinite(minutes) || minutes <= 0) return 0;
-          localStorage.setItem(key, String(minutes));
+          await hybridStorageSet(key, String(minutes));
         }
         return minutes;
       } catch (e) {
@@ -1098,7 +1098,7 @@ async function continueInitQuiz() {
         timerInterval = null;
         if (!quizSubmitted) {
           alert('Hết thời gian. Bài sẽ được nộp tự động.');
-          submitQuiz();
+          await submitQuiz();
         }
       }
     }
@@ -1113,7 +1113,7 @@ async function continueInitQuiz() {
         endTimeMs = parseInt(saved, 10);
       } else {
         endTimeMs = Date.now() + durationMinutes * 60 * 1000;
-        localStorage.setItem(key, String(endTimeMs));
+        await hybridStorageSet(key, String(endTimeMs));
       }
       if (timerEl) timerEl.style.display = 'block';
       if (pausedSaved) {
@@ -1129,34 +1129,34 @@ async function continueInitQuiz() {
       }
     }
 
-    function togglePauseResume(){
+    async function togglePauseResume(){
       if (isPaused) {
-        resumeTimer();
+        await resumeTimer();
       } else {
-        pauseTimer();
+        await pauseTimer();
       }
     }
 
-    function pauseTimer(){
+    async function pauseTimer(){
       if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
       const remain = Math.max(0, endTimeMs - Date.now());
-      localStorage.setItem(`quiz_timer_paused_${topicId}`, 'true');
-      localStorage.setItem(`quiz_timer_remaining_${topicId}`, String(remain));
+      await hybridStorageSet(`quiz_timer_paused_${topicId}`, 'true');
+      await hybridStorageSet(`quiz_timer_remaining_${topicId}`, String(remain));
       isPaused = true;
       setPausedUI(true);
       updateTimerDisplay(remain);
     }
 
-    function resumeTimer(){
+    async function resumeTimer(){
       const remainingKey = `quiz_timer_remaining_${topicId}`;
       const endKey = `quiz_timer_end_${topicId}`;
       const pausedKey = `quiz_timer_paused_${topicId}`;
       const remain = parseInt(localStorage.getItem(remainingKey) || '0', 10);
       const base = isNaN(remain) || remain <= 0 ? (endTimeMs - Date.now()) : remain;
       endTimeMs = Date.now() + Math.max(0, base);
-      localStorage.setItem(endKey, String(endTimeMs));
-      localStorage.removeItem(remainingKey);
-      localStorage.setItem(pausedKey, 'false');
+      await hybridStorageSet(endKey, String(endTimeMs));
+      await hybridStorageSet(remainingKey, '');
+      await hybridStorageSet(pausedKey, 'false');
       isPaused = false;
       setPausedUI(false);
       updateTimer();
@@ -1385,7 +1385,7 @@ updateNextBtnStatus();
       
       // Update UI
       showQuestion(currentQuestionIndex);
-      saveProgress();
+      await saveProgress();
 updateNextBtnStatus();
 
 requestAnimationFrame(() => {
@@ -1418,7 +1418,7 @@ requestAnimationFrame(() => {
       if (isPaused) return;
       userAnswers[currentQuestionIndex].flagged = !userAnswers[currentQuestionIndex].flagged;
       updateFlagButton();
-      saveProgress();
+      await saveProgress();
     }
 
 
@@ -1454,7 +1454,7 @@ requestAnimationFrame(() => {
       if (wrongAnswers.length > 0) {
         const existingWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
         existingWrongAnswers.push(...wrongAnswers);
-        localStorage.setItem('wrong_answers', JSON.stringify(existingWrongAnswers));
+        await hybridStorageSet('wrong_answers', JSON.stringify(existingWrongAnswers));
       }
       
       // Get user info from modal - lưu chính xác giá trị đã nhập
@@ -1480,7 +1480,7 @@ requestAnimationFrame(() => {
       };
       const existingStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
       existingStats.push(sessionStats);
-      localStorage.setItem('quiz_statistics', JSON.stringify(existingStats));
+      await hybridStorageSet('quiz_statistics', JSON.stringify(existingStats));
       
       console.log('Saved statistics:', sessionStats);
       console.log('Wrong answers saved:', wrongAnswers.length);
@@ -1504,7 +1504,7 @@ requestAnimationFrame(() => {
         let userId = localStorage.getItem('quiz_user_id');
         if (!userId) {
           userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-          localStorage.setItem('quiz_user_id', userId);
+          await hybridStorageSet('quiz_user_id', userId);
         }
         
         // Chuẩn bị dữ liệu câu sai với đầy đủ đáp án A, B, C, D
@@ -1590,7 +1590,7 @@ requestAnimationFrame(() => {
       }, 3000);
     }
 
-    function submitQuiz() {
+    async function submitQuiz() {
       if (quizSubmitted) return;
       
       // Tính điểm số trước khi hiển thị modal
@@ -1627,7 +1627,7 @@ requestAnimationFrame(() => {
       // Nộp bài
       quizSubmitted = true;
       showResults();
-      saveProgress();
+      await saveProgress();
       saveWrongAnswers();
       // clear timer keys
       localStorage.removeItem(`quiz_timer_end_${topicId}`);
@@ -1751,7 +1751,7 @@ function updateNextBtnStatus(){
           resultArea.style.display = 'none';
           showQuestion(0);
           updateFlagButton(); // Update flag button visibility
-          saveProgress();
+          await saveProgress();
           const ef = getEffectiveDurationMinutes();
           if (ef > 0) {
             startOrResumeTimer(ef);

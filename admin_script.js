@@ -14,7 +14,7 @@ function handleLogin(e) {
   const password = document.getElementById('password').value;
   
   if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
-    localStorage.setItem('admin_authenticated', 'true');
+    safeLocalStorageSet('admin_authenticated', 'true');
     showAdminPanel();
   } else {
     alert('Tên đăng nhập hoặc mật khẩu không đúng!');
@@ -57,12 +57,215 @@ async function saveTopics(topics) {
     }
   } catch (error) {
     console.error('Error saving topics:', error);
+    
+    // Nếu vẫn gặp lỗi quota, thử dọn dẹp dữ liệu cũ
+    if (error.name === 'QuotaExceededError') {
+      console.log('Quota exceeded, trying to cleanup old data...');
+      try {
+        // Dọn dẹp dữ liệu cũ
+        if (typeof cleanupOldData === 'function') {
+          cleanupOldData();
+        }
+        
+        // Thử lại
+        const retrySuccess = await hybridStorageSet('quiz_topics', JSON.stringify(topics));
+        if (retrySuccess) {
+          console.log('Successfully saved after cleanup');
+          return;
+        }
+      } catch (retryError) {
+        console.error('Still failed after cleanup:', retryError);
+      }
+    }
+    
     throw error;
   }
 }
 
 function uuid() {
   return 'topic-' + Math.random().toString(36).substr(2, 9) + Date.now();
+}
+
+// Hybrid storage functions
+async function hybridStorageSet(key, value) {
+  try {
+    // Thử localStorage trước
+    if (safeLocalStorageSet(key, value)) {
+      return true;
+    }
+  } catch (e) {
+    console.log('localStorage failed, trying IndexedDB...');
+  }
+  
+  try {
+    // Fallback to IndexedDB
+    await indexedDBStorage.setItem(key, value);
+    console.log(`Data saved to IndexedDB: ${key}`);
+    return true;
+  } catch (e) {
+    console.error('Both localStorage and IndexedDB failed:', e);
+    return false;
+  }
+}
+
+async function hybridStorageGet(key) {
+  try {
+    // Thử localStorage trước
+    const localData = localStorage.getItem(key);
+    if (localData) {
+      return localData;
+    }
+  } catch (e) {
+    console.log('localStorage read failed, trying IndexedDB...');
+  }
+  
+  try {
+    // Fallback to IndexedDB
+    const indexedData = await indexedDBStorage.getItem(key);
+    return indexedData;
+  } catch (e) {
+    console.error('Both localStorage and IndexedDB read failed:', e);
+    return null;
+  }
+}
+
+// Wrapper function để lưu dữ liệu an toàn
+function safeLocalStorageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    if (error.name === 'QuotaExceededError') {
+      console.warn('Quota exceeded for localStorage');
+      return false;
+    }
+    throw error;
+  }
+}
+
+// IndexedDB storage class
+class IndexedDBStorage {
+  constructor() {
+    this.dbName = 'QuizStorageDB';
+    this.version = 1;
+    this.db = null;
+  }
+
+  async init() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.version);
+      
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        this.db = request.result;
+        resolve(this.db);
+      };
+      
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains('quizData')) {
+          db.createObjectStore('quizData', { keyPath: 'key' });
+        }
+      };
+    });
+  }
+
+  async setItem(key, value) {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['quizData'], 'readwrite');
+      const store = transaction.objectStore('quizData');
+      const request = store.put({ key, value, timestamp: Date.now() });
+      
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async getItem(key) {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['quizData'], 'readonly');
+      const store = transaction.objectStore('quizData');
+      const request = store.get(key);
+      
+      request.onsuccess = () => {
+        resolve(request.result ? request.result.value : null);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async removeItem(key) {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['quizData'], 'readwrite');
+      const store = transaction.objectStore('quizData');
+      const request = store.delete(key);
+      
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  async clear() {
+    if (!this.db) await this.init();
+    
+    return new Promise((resolve, reject) => {
+      const transaction = this.db.transaction(['quizData'], 'readwrite');
+      const store = transaction.objectStore('quizData');
+      const request = store.clear();
+      
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => reject(request.error);
+    });
+  }
+}
+
+// Khởi tạo IndexedDB storage
+const indexedDBStorage = new IndexedDBStorage();
+
+// Xóa dữ liệu cũ tự động
+function cleanupOldData() {
+  try {
+    const now = Date.now();
+    const maxAge = 30 * 24 * 60 * 60 * 1000; // 30 ngày
+    
+    // Xóa thống kê cũ
+    const stats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
+    const recentStats = stats.filter(stat => {
+      const statTime = new Date(stat.timestamp).getTime();
+      return (now - statTime) < maxAge;
+    });
+    
+    if (recentStats.length < stats.length) {
+      safeLocalStorageSet('quiz_statistics', JSON.stringify(recentStats));
+      console.log(`Cleaned up ${stats.length - recentStats.length} old statistics`);
+    }
+    
+    // Xóa câu sai cũ
+    const wrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
+    const recentWrongAnswers = wrongAnswers.filter(answer => {
+      const answerTime = new Date(answer.timestamp).getTime();
+      return (now - answerTime) < maxAge;
+    });
+    
+    if (recentWrongAnswers.length < wrongAnswers.length) {
+      safeLocalStorageSet('wrong_answers', JSON.stringify(recentWrongAnswers));
+      console.log(`Cleaned up ${wrongAnswers.length - recentWrongAnswers.length} old wrong answers`);
+    }
+    
+    return {
+      statsRemoved: stats.length - recentStats.length,
+      wrongAnswersRemoved: wrongAnswers.length - recentWrongAnswers.length
+    };
+  } catch (e) {
+    console.error('Error cleaning up old data:', e);
+    return null;
+  }
 }
 
 function parseExcelFile(file, callback) {
@@ -215,7 +418,7 @@ async function renderTopics() {
   await renderExams(exams);
 }
 
-function updateExamView(exam) {
+async function updateExamView(exam) {
   const editBtn = document.getElementById('edit-exam-btn');
   const deleteBtn = document.getElementById('delete-exam-btn');
   const detailContainer = document.getElementById('exam-detail-container');
@@ -257,7 +460,7 @@ async function renderExams(exams) {
     selector.innerHTML = '<option value="">-- Chưa có bài thi --</option>';
     detailContainer.style.display = 'none';
     if (gridContainer) gridContainer.innerHTML = '<div class="empty-state"><i class="material-icons">assignment</i><p>Chưa có bài thi nào</p></div>';
-    updateExamView(null);
+    await updateExamView(null);
     return;
   }
   
@@ -272,13 +475,13 @@ async function renderExams(exams) {
   
   // Clear detail on re-render
   detailContainer.style.display = 'none';
-  updateExamView(null);
+  await updateExamView(null);
   
   // Setup selector change event
-  selector.onchange = (e) => {
+  selector.onchange = async (e) => {
     const examId = e.target.value;
     const exam = exams.find(ex => ex.id === examId);
-    updateExamView(exam);
+    await updateExamView(exam);
   };
   
   // Populate grid view
@@ -1065,25 +1268,13 @@ async function buildCompositeExam(e) {
     await saveTopics(topics);
     console.log('Exam created successfully with hybrid storage');
   } catch (error) {
+    console.error('Error creating exam:', error);
     if (error.name === 'QuotaExceededError') {
-      // Thử dọn dẹp dữ liệu cũ trước
-      console.log('Quota exceeded, cleaning up old data...');
-      if (typeof cleanupOldData === 'function') {
-        cleanupOldData();
-      }
-      
-      // Thử lại
-      try {
-        await saveTopics(topics);
-        console.log('Exam created after cleanup');
-      } catch (retryError) {
-        msg.textContent = 'Lỗi: Dung lượng lưu trữ đầy! Vui lòng xóa dữ liệu cũ hoặc giảm số câu hỏi.';
-        return;
-      }
+      msg.textContent = 'Lỗi: Dung lượng lưu trữ đầy! Vui lòng:\n1. Nhấn "Dọn dẹp dữ liệu cũ"\n2. Hoặc giảm số câu hỏi\n3. Hoặc xóa bộ nhớ';
     } else {
       msg.textContent = 'Lỗi tạo bài thi: ' + error.message;
-      return;
     }
+    return;
   }
   await renderTopics();
   document.getElementById('exam-builder-form').reset();
@@ -1179,13 +1370,13 @@ function toggleTopicView() {
     dropdownView.style.display = 'none';
     gridView.style.display = 'block';
     toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">list</i> Chế độ dropdown';
-    localStorage.setItem('admin_topic_view', 'grid');
+    safeLocalStorageSet('admin_topic_view', 'grid');
   } else {
     // Switch to dropdown
     dropdownView.style.display = 'block';
     gridView.style.display = 'none';
     toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới';
-    localStorage.setItem('admin_topic_view', 'dropdown');
+    safeLocalStorageSet('admin_topic_view', 'dropdown');
   }
 }
 
@@ -1211,7 +1402,7 @@ function toggleExamView() {
     dropdownView.style.display = 'none';
     gridView.style.display = 'block';
     toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">list</i> Chế độ dropdown';
-    localStorage.setItem('admin_exam_view', 'grid');
+    safeLocalStorageSet('admin_exam_view', 'grid');
     
     // Sync selection from dropdown to grid
     const examId = document.getElementById('exam-selector').value;
@@ -1225,7 +1416,7 @@ function toggleExamView() {
     dropdownView.style.display = 'block';
     gridView.style.display = 'none';
     toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới';
-    localStorage.setItem('admin_exam_view', 'dropdown');
+    safeLocalStorageSet('admin_exam_view', 'dropdown');
     
     // Sync selection from grid to dropdown
     const selectedExam = document.querySelector('#exam-list-container .topic-item.selected');
@@ -1250,13 +1441,13 @@ function toggleExamBuilderView() {
     if (dropdownView) dropdownView.style.display = 'none';
     if (gridView) gridView.style.display = 'block';
     if (toggleBtn) toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">list</i> Chế độ dropdown';
-    localStorage.setItem('admin_exam_builder_view', 'grid');
+    safeLocalStorageSet('admin_exam_builder_view', 'grid');
   } else {
     // Switch to dropdown
     if (dropdownView) dropdownView.style.display = 'block';
     if (gridView) gridView.style.display = 'none';
     if (toggleBtn) toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới';
-    localStorage.setItem('admin_exam_builder_view', 'dropdown');
+    safeLocalStorageSet('admin_exam_builder_view', 'dropdown');
   }
 }
 
@@ -1425,7 +1616,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Add new topic button
     const addTopicBtn = document.getElementById('add-topic-btn');
     if (addTopicBtn) {
-      addTopicBtn.onclick = () => {
+      addTopicBtn.onclick = async () => {
         const topicFormContainer = document.querySelector('.topic-form');
         if (topicFormContainer) topicFormContainer.scrollIntoView({ behavior: 'smooth' });
       };
@@ -1434,7 +1625,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Save topic form
     const topicForm = document.getElementById('topic-form');
     if (topicForm) {
-      topicForm.onsubmit = (e) => {
+      topicForm.onsubmit = async (e) => {
         e.preventDefault();
         const topicName = document.getElementById('topic-name').value.trim();
         const fileInput = document.getElementById('file-quiz');

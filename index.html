@@ -408,7 +408,7 @@
         }
 
         // Xóa dữ liệu cũ tự động
-        function cleanupOldData() {
+        async function cleanupOldData() {
           try {
             const now = Date.now();
             const maxAge = 30 * 24 * 60 * 60 * 1000; // 30 ngày
@@ -421,7 +421,7 @@
             });
             
             if (recentStats.length < stats.length) {
-              localStorage.setItem('quiz_statistics', JSON.stringify(recentStats));
+              await hybridStorageSet('quiz_statistics', JSON.stringify(recentStats));
               console.log(`Cleaned up ${stats.length - recentStats.length} old statistics`);
             }
             
@@ -433,7 +433,7 @@
             });
             
             if (recentWrongAnswers.length < wrongAnswers.length) {
-              localStorage.setItem('wrong_answers', JSON.stringify(recentWrongAnswers));
+              await hybridStorageSet('wrong_answers', JSON.stringify(recentWrongAnswers));
               console.log(`Cleaned up ${wrongAnswers.length - recentWrongAnswers.length} old wrong answers`);
             }
             
@@ -448,7 +448,7 @@
         }
 
         // Wrapper function để lưu dữ liệu an toàn với tối ưu hóa
-        function safeLocalStorageSet(key, value, options = {}) {
+        async function safeLocalStorageSet(key, value, options = {}) {
           try {
             let dataToStore = value;
             
@@ -457,7 +457,7 @@
               dataToStore = compressData(value);
             }
             
-            localStorage.setItem(key, dataToStore);
+            await hybridStorageSet(key, dataToStore);
             return true;
           } catch (error) {
             if (error.name === 'QuotaExceededError') {
@@ -466,7 +466,7 @@
               if (cleanupResult) {
                 console.log('Cleaned up old data, retrying save...');
                 try {
-                  localStorage.setItem(key, dataToStore);
+                  await hybridStorageSet(key, dataToStore);
                   return true;
                 } catch (retryError) {
                   handleQuotaExceededError(retryError, `saving ${key} after cleanup`);
@@ -482,8 +482,8 @@
         }
 
         // Lưu dữ liệu với tối ưu hóa
-        function optimizedLocalStorageSet(key, value) {
-          return safeLocalStorageSet(key, value, { compress: true });
+        async function optimizedLocalStorageSet(key, value) {
+          return await safeLocalStorageSet(key, value, { compress: true });
         }
 
         // IndexedDB để lưu trữ dữ liệu lớn
@@ -575,7 +575,7 @@
         async function hybridStorageSet(key, value) {
           try {
             // Thử localStorage trước
-            if (safeLocalStorageSet(key, value)) {
+            if (await safeLocalStorageSet(key, value)) {
               return true;
             }
           } catch (e) {
@@ -720,7 +720,7 @@
             const file = e.target.files[0];
             if (file) {
               const reader = new FileReader();
-              reader.onload = function(e) {
+              reader.onload = async function(e) {
                 try {
                   const data = JSON.parse(e.target.result);
                   
@@ -731,9 +731,9 @@
                              `- ${data.wrong_answers?.length || 0} câu sai\n\n` +
                              `Không thể hoàn tác!`)) {
                     
-                    if (data.quiz_topics) localStorage.setItem('quiz_topics', JSON.stringify(data.quiz_topics));
-                    if (data.quiz_statistics) localStorage.setItem('quiz_statistics', JSON.stringify(data.quiz_statistics));
-                    if (data.wrong_answers) localStorage.setItem('wrong_answers', JSON.stringify(data.wrong_answers));
+                    if (data.quiz_topics) await hybridStorageSet('quiz_topics', JSON.stringify(data.quiz_topics));
+                    if (data.quiz_statistics) await hybridStorageSet('quiz_statistics', JSON.stringify(data.quiz_statistics));
+                    if (data.wrong_answers) await hybridStorageSet('wrong_answers', JSON.stringify(data.wrong_answers));
                     
                     alert('✅ Dữ liệu đã được import thành công!\n\nVui lòng tải lại trang để áp dụng thay đổi.');
                     window.location.reload();
@@ -1404,7 +1404,7 @@
         }
 
         // View toggle functions
-        function toggleTopicView() {
+        async function toggleTopicView() {
           const dropdownView = document.getElementById('topic-dropdown-view');
           const gridView = document.getElementById('topic-grid-view');
           const toggleBtn = document.getElementById('topic-view-toggle');
@@ -1414,16 +1414,16 @@
             dropdownView.style.display = 'none';
             gridView.style.display = 'block';
             toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">list</i> Chế độ dropdown';
-            localStorage.setItem('index_topic_view', 'grid');
+            await hybridStorageSet('index_topic_view', 'grid');
           } else {
             dropdownView.style.display = 'block';
             gridView.style.display = 'none';
             toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới';
-            localStorage.setItem('index_topic_view', 'dropdown');
+            await hybridStorageSet('index_topic_view', 'dropdown');
           }
         }
 
-        function toggleExamView() {
+        async function toggleExamView() {
           const dropdownView = document.getElementById('exam-dropdown-view');
           const gridView = document.getElementById('exam-grid-view');
           const toggleBtn = document.getElementById('exam-view-toggle');
@@ -1433,12 +1433,12 @@
             dropdownView.style.display = 'none';
             gridView.style.display = 'block';
             toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">list</i> Chế độ dropdown';
-            localStorage.setItem('index_exam_view', 'grid');
+            await hybridStorageSet('index_exam_view', 'grid');
           } else {
             dropdownView.style.display = 'block';
             gridView.style.display = 'none';
             toggleBtn.innerHTML = '<i class="material-icons" style="font-size: 1.2rem;">view_module</i> Chế độ lưới';
-            localStorage.setItem('index_exam_view', 'dropdown');
+            await hybridStorageSet('index_exam_view', 'dropdown');
           }
         }
 
@@ -1643,7 +1643,7 @@
 
 
       // Delete all review topics (created from wrong answers)
-      window.deleteAllReviewTopics = function() {
+      window.deleteAllReviewTopics = async function() {
         const allTopics = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
         const reviewTopics = allTopics.filter(topic => topic.name.includes('Ôn tập câu sai'));
         
@@ -1661,17 +1661,17 @@
           
           // Remove all review topics
           const updatedTopics = allTopics.filter(topic => !topic.name.includes('Ôn tập câu sai'));
-          localStorage.setItem('quiz_topics', JSON.stringify(updatedTopics));
+          await hybridStorageSet('quiz_topics', JSON.stringify(updatedTopics));
           
           // Remove related statistics
           const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
           const updatedStats = allStats.filter(stat => !reviewTopicIds.includes(stat.topicId));
-          localStorage.setItem('quiz_statistics', JSON.stringify(updatedStats));
+          await hybridStorageSet('quiz_statistics', JSON.stringify(updatedStats));
           
           // Remove related wrong answers
           const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
           const updatedWrongAnswers = allWrongAnswers.filter(answer => !reviewTopicIds.includes(answer.topicId));
-          localStorage.setItem('wrong_answers', JSON.stringify(updatedWrongAnswers));
+          await hybridStorageSet('wrong_answers', JSON.stringify(updatedWrongAnswers));
           
           alert(`Đã xóa thành công ${reviewTopics.length} chuyên đề ôn tập!`);
           
@@ -1693,7 +1693,7 @@
       };
 
       // Delete review topic (created from wrong answers)
-      window.deleteReviewTopic = function(topicId, topicName) {
+      window.deleteReviewTopic = async function(topicId, topicName) {
         if (!confirm(`Bạn có chắc chắn muốn xóa chuyên đề "${topicName}"?\n\nHành động này sẽ xóa:\n- Chuyên đề ôn tập\n- Tất cả thống kê liên quan\n- Không thể hoàn tác`)) {
           return;
         }
@@ -1704,17 +1704,17 @@
           
           // Remove the topic
           const updatedTopics = allTopics.filter(topic => topic.id !== topicId);
-          localStorage.setItem('quiz_topics', JSON.stringify(updatedTopics));
+          await hybridStorageSet('quiz_topics', JSON.stringify(updatedTopics));
           
           // Remove related statistics
           const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
           const updatedStats = allStats.filter(stat => stat.topicId !== topicId);
-          localStorage.setItem('quiz_statistics', JSON.stringify(updatedStats));
+          await hybridStorageSet('quiz_statistics', JSON.stringify(updatedStats));
           
           // Remove related wrong answers
           const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
           const updatedWrongAnswers = allWrongAnswers.filter(answer => answer.topicId !== topicId);
-          localStorage.setItem('wrong_answers', JSON.stringify(updatedWrongAnswers));
+          await hybridStorageSet('wrong_answers', JSON.stringify(updatedWrongAnswers));
           
           alert('Đã xóa chuyên đề ôn tập thành công!');
           
@@ -1736,7 +1736,7 @@
       };
 
       // Create quiz from wrong answers
-      window.createQuizFromWrongAnswers = function(topicId, topicName) {
+      window.createQuizFromWrongAnswers = async function(topicId, topicName) {
         const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
         const allTopics = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
         
@@ -1812,7 +1812,9 @@
         
         const topics = allTopics;
         topics.push(newTopic);
-        localStorage.setItem('quiz_topics', JSON.stringify(topics));
+        if (!(await hybridStorageSet('quiz_topics', JSON.stringify(topics)))) {
+          console.warn('Could not save topics to storage');
+        }
         
         if (confirm('Đã tạo bài thi "' + newTopic.name + '"!\n\nBạn có muốn làm bài ngay không?')) {
           window.location.href = 'quiz.html?topic=' + newTopicId;
