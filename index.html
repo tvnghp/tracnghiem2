@@ -14,17 +14,15 @@
   <meta name="format-detection" content="telephone=no">
   
   <!-- iOS specific meta tags -->
-  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Quiz Cần Thơ II">
-  <!-- Excel export library -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <meta name="apple-touch-fullscreen" content="yes">
   <link rel="apple-touch-icon" href="logo.png">
   <link rel="apple-touch-icon" sizes="180x180" href="logo.png">
   
+  <!-- Excel export library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  
   <!-- Android specific meta tags -->
-  <meta name="mobile-web-app-capable" content="yes">
   <meta name="application-name" content="Quiz Cần Thơ II">
   <meta name="msapplication-TileColor" content="#800020">
   <meta name="msapplication-tap-highlight" content="no">
@@ -105,7 +103,7 @@
   <div class="container">
     <header>
       <div class="logo">
-        <img src="logo.png" alt="Logo" id="logo-img">
+        <img src="./logo.png" alt="Logo" id="logo-img" onerror="console.error('Logo load failed:', this.src); this.style.display='none';">
         <div class="logo-text">
           <h1>Hệ thống ôn luyện trắc nghiệm</h1>
           <p>Chi nhánh Cần Thơ II</p>
@@ -397,27 +395,6 @@
           clearStorageBtn.addEventListener('click', clearWebStorage);
         }
 
-        // Thêm nút kiểm tra dung lượng localStorage
-        const checkStorageBtn = document.createElement('button');
-        checkStorageBtn.innerHTML = '<i class="material-icons">storage</i> Kiểm tra dung lượng';
-        checkStorageBtn.className = 'btn btn-outline admin-btn';
-        checkStorageBtn.style.marginTop = '10px';
-        checkStorageBtn.addEventListener('click', function() {
-          const usage = checkLocalStorageUsage();
-          if (usage) {
-            const status = usage.warning ? '⚠️ CẢNH BÁO' : '✅ Bình thường';
-            const color = usage.warning ? '#ff9800' : '#4caf50';
-            
-            alert(`${status}\n\n` +
-                  `Dung lượng đã sử dụng: ${usage.used}MB\n` +
-                  `Giới hạn: ${usage.limit}MB\n` +
-                  `Tỷ lệ sử dụng: ${usage.percentage}%\n\n` +
-                  `${usage.warning ? 'Khuyến nghị: Xóa dữ liệu cũ để giải phóng dung lượng.' : 'Dung lượng sử dụng trong giới hạn an toàn.'}`);
-          } else {
-            alert('Không thể kiểm tra dung lượng localStorage.');
-          }
-        });
-        document.querySelector('.admin-buttons-grid').appendChild(checkStorageBtn);
 
         if (refreshDataBtn) {
           refreshDataBtn.addEventListener('click', function() {
@@ -646,40 +623,19 @@
           <!-- Header -->
           <div style="
             display: flex !important;
-            justify-content: space-between !important;
+            justify-content: center !important;
             align-items: center !important;
-            padding: 20px !important;
-            border-bottom: 2px solid #e0e0e0 !important;
+            padding: 10px 15px !important;
+            border-bottom: 1px solid #e0e0e0 !important;
             background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
             flex-shrink: 0 !important;
             width: 100% !important;
             box-sizing: border-box !important;
           ">
-            <h2 style="color: #800020; margin: 0; font-size: 28px;">
-              📊 Thống kê tổng quát
+            <h2 style="color: #800020; margin: 0; font-size: 16px; font-weight: 600; line-height: 1.2; display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 18px;">📊</span>
+              <span>Thống kê tổng quát</span>
             </h2>
-            <button onclick="
-              // Restore original body content
-              if (window.originalBodyContent) {
-                document.body.innerHTML = window.originalBodyContent;
-                // Re-initialize event listeners
-                document.addEventListener('DOMContentLoaded', function() {
-                  // Re-initialize all event listeners here
-                });
-              }
-            " style="
-              background: #c62828;
-              color: white;
-              border: none;
-              border-radius: 50%;
-              width: 40px;
-              height: 40px;
-              cursor: pointer;
-              font-size: 20px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-            ">×</button>
           </div>
           
           <!-- Main Content Container -->
@@ -737,6 +693,9 @@
                     cursor: pointer;
                     font-size: 16px;
                     margin-top: 16px;
+                    min-height: 48px;
+                    width: 100%;
+                    max-width: 200px;
                   ">
                     🔄 Tải lại
                   </button>
@@ -749,57 +708,118 @@
           <div style="margin-bottom: 40px;">
             <h3 style="color: #800020; margin-bottom: 20px; font-size: 22px;">📈 Thống kê theo chuyên đề</h3>
             <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-              <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                <thead style="background: #f5f5f5;">
-                  <tr>
-                    <th style="padding: 16px; text-align: left; font-weight: 600; color: #333;">Chuyên đề</th>
-                    <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Loại</th>
-                    <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Lần làm</th>
-                    <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Điểm TB</th>
-                    <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Cao nhất</th>
-                    <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Câu sai</th>
-                    <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${sortedTopics.map((topic, index) => `
-                    <tr style="border-bottom: 1px solid #f0f0f0; ${topic.name.includes('Ôn tập câu sai') ? 'background: #fff3e0;' : ''}">
-                      <td style="padding: 16px; color: #333; font-weight: 600;">
-                        ${topic.name.includes('Ôn tập câu sai') ? `
-                          <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;">ÔN TẬP</span>
-                            <span style="color: #f57c00;">${topic.name}</span>
-                          </div>
-                        ` : topic.name}
-                      </td>
-                      <td style="padding: 16px; text-align: center;">
-                        <span style="background: ${topic.isExam ? '#ff9800' : topic.name.includes('Ôn tập câu sai') ? '#ff9800' : '#4caf50'}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">
-                          ${topic.isExam ? 'EXAM' : topic.name.includes('Ôn tập câu sai') ? 'REVIEW' : 'TOPIC'}
-                        </span>
-                      </td>
-                      <td style="padding: 16px; text-align: center; color: #666;">${topic.attempts}</td>
-                      <td style="padding: 16px; text-align: center; color: ${topic.avgScore >= 80 ? '#2e7d32' : topic.avgScore >= 60 ? '#f57c00' : '#c62828'}; font-weight: bold; font-size: 18px;">${topic.avgScore}%</td>
-                      <td style="padding: 16px; text-align: center; color: #666;">${topic.bestScore}%</td>
-                      <td style="padding: 16px; text-align: center; color: #c62828; font-weight: 600;">${topic.totalWrong}</td>
-                      <td style="padding: 12px; text-align: center;">
-                        <div style="display: flex; gap: 6px; justify-content: center; flex-direction: column;">
-                          <button onclick="exportTopicStatisticsExcel('${topic.topicId}')" style="background: #1976d2; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='#1565c0'" onmouseout="this.style.background='#1976d2'" title="Xuất Excel">
-                            <i class="material-icons" style="font-size: 14px;">download</i> Excel
-                          </button>
-                          <button onclick="createQuizFromWrongAnswers('${topic.topicId}', '${topic.name}')" style="background: #4caf50; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='#45a049'" onmouseout="this.style.background='#4caf50'" title="Tạo bài thi từ câu sai">
-                            <i class="material-icons" style="font-size: 14px;">quiz</i> Tạo bài
-                          </button>
-                          ${topic.name.includes('Ôn tập câu sai') ? `
-                          <button onclick="deleteReviewTopic('${topic.topicId}', '${topic.name}')" style="background: #f44336; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='#d32f2f'" onmouseout="this.style.background='#f44336'" title="Xóa chuyên đề ôn tập">
-                            <i class="material-icons" style="font-size: 14px;">delete</i> Xóa
-                          </button>
-                          ` : ''}
-                        </div>
-                      </td>
+              <!-- Desktop Table View -->
+              <div class="desktop-table" style="display: block;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                  <thead style="background: #f5f5f5;">
+                    <tr>
+                      <th style="padding: 16px; text-align: left; font-weight: 600; color: #333;">Chuyên đề</th>
+                      <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Loại</th>
+                      <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Lần làm</th>
+                      <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Điểm TB</th>
+                      <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Cao nhất</th>
+                      <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Câu sai</th>
+                      <th style="padding: 16px; text-align: center; font-weight: 600; color: #333;">Thao tác</th>
                     </tr>
-                  `).join('')}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    ${sortedTopics.map((topic, index) => `
+                      <tr style="border-bottom: 1px solid #f0f0f0; ${topic.name.includes('Ôn tập câu sai') ? 'background: #fff3e0;' : ''}">
+                        <td style="padding: 16px; color: #333; font-weight: 600;">
+                          ${topic.name.includes('Ôn tập câu sai') ? `
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                              <span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;">ÔN TẬP</span>
+                              <span style="color: #f57c00;">${topic.name}</span>
+                            </div>
+                          ` : topic.name}
+                        </td>
+                        <td style="padding: 16px; text-align: center;">
+                          <span style="background: ${topic.isExam ? '#ff9800' : topic.name.includes('Ôn tập câu sai') ? '#ff9800' : '#4caf50'}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">
+                            ${topic.isExam ? 'EXAM' : topic.name.includes('Ôn tập câu sai') ? 'REVIEW' : 'TOPIC'}
+                          </span>
+                        </td>
+                        <td style="padding: 16px; text-align: center; color: #666;">${topic.attempts}</td>
+                        <td style="padding: 16px; text-align: center; color: ${topic.avgScore >= 80 ? '#2e7d32' : topic.avgScore >= 60 ? '#f57c00' : '#c62828'}; font-weight: bold; font-size: 18px;">${topic.avgScore}%</td>
+                        <td style="padding: 16px; text-align: center; color: #666;">${topic.bestScore}%</td>
+                        <td style="padding: 16px; text-align: center; color: #c62828; font-weight: 600;">${topic.totalWrong}</td>
+                        <td style="padding: 12px; text-align: center;">
+                          <div style="display: flex; gap: 6px; justify-content: center; flex-direction: column;">
+                            <button onclick="exportTopicStatisticsExcel('${topic.topicId}')" style="background: #1976d2; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='#1565c0'" onmouseout="this.style.background='#1976d2'" title="Xuất Excel">
+                              <i class="material-icons" style="font-size: 14px;">download</i> Excel
+                            </button>
+                            <button onclick="createQuizFromWrongAnswers('${topic.topicId}', '${topic.name}')" style="background: #4caf50; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='#45a049'" onmouseout="this.style.background='#4caf50'" title="Tạo bài thi từ câu sai">
+                              <i class="material-icons" style="font-size: 14px;">quiz</i> Tạo bài
+                            </button>
+                            ${topic.name.includes('Ôn tập câu sai') ? `
+                            <button onclick="deleteReviewTopic('${topic.topicId}', '${topic.name}')" style="background: #f44336; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='#d32f2f'" onmouseout="this.style.background='#f44336'" title="Xóa chuyên đề ôn tập">
+                              <i class="material-icons" style="font-size: 14px;">delete</i> Xóa
+                            </button>
+                            ` : ''}
+                          </div>
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+              
+              <!-- Mobile Card View -->
+              <div class="mobile-cards" style="display: none;">
+                ${sortedTopics.map((topic, index) => `
+                  <div style="padding: 20px; border-bottom: 1px solid #f0f0f0; ${topic.name.includes('Ôn tập câu sai') ? 'background: #fff3e0;' : ''}">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                      <div style="flex: 1;">
+                        <h4 style="margin: 0 0 8px 0; color: #333; font-size: 16px; font-weight: 600; line-height: 1.3;">
+                          ${topic.name.includes('Ôn tập câu sai') ? `
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                              <span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;">ÔN TẬP</span>
+                              <span style="color: #f57c00;">${topic.name}</span>
+                            </div>
+                          ` : topic.name}
+                        </h4>
+                        <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+                          <span style="background: ${topic.isExam ? '#ff9800' : topic.name.includes('Ôn tập câu sai') ? '#ff9800' : '#4caf50'}; color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">
+                            ${topic.isExam ? 'EXAM' : topic.name.includes('Ôn tập câu sai') ? 'REVIEW' : 'TOPIC'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                      <div style="text-align: center; padding: 8px; background: #f8f9fa; border-radius: 8px;">
+                        <div style="font-size: 14px; color: #666; margin-bottom: 4px;">Lần làm</div>
+                        <div style="font-size: 18px; font-weight: 600; color: #333;">${topic.attempts}</div>
+                      </div>
+                      <div style="text-align: center; padding: 8px; background: #f8f9fa; border-radius: 8px;">
+                        <div style="font-size: 14px; color: #666; margin-bottom: 4px;">Điểm TB</div>
+                        <div style="font-size: 18px; font-weight: 600; color: ${topic.avgScore >= 80 ? '#2e7d32' : topic.avgScore >= 60 ? '#f57c00' : '#c62828'};">${topic.avgScore}%</div>
+                      </div>
+                      <div style="text-align: center; padding: 8px; background: #f8f9fa; border-radius: 8px;">
+                        <div style="font-size: 14px; color: #666; margin-bottom: 4px;">Cao nhất</div>
+                        <div style="font-size: 18px; font-weight: 600; color: #333;">${topic.bestScore}%</div>
+                      </div>
+                      <div style="text-align: center; padding: 8px; background: #f8f9fa; border-radius: 8px;">
+                        <div style="font-size: 14px; color: #666; margin-bottom: 4px;">Câu sai</div>
+                        <div style="font-size: 18px; font-weight: 600; color: #c62828;">${topic.totalWrong}</div>
+                      </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                      <button onclick="exportTopicStatisticsExcel('${topic.topicId}')" style="background: #1976d2; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 120px; justify-content: center;" title="Xuất Excel">
+                        <i class="material-icons" style="font-size: 16px;">download</i> Excel
+                      </button>
+                      <button onclick="createQuizFromWrongAnswers('${topic.topicId}', '${topic.name}')" style="background: #4caf50; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 120px; justify-content: center;" title="Tạo bài thi từ câu sai">
+                        <i class="material-icons" style="font-size: 16px;">quiz</i> Tạo bài
+                      </button>
+                      ${topic.name.includes('Ôn tập câu sai') ? `
+                      <button onclick="deleteReviewTopic('${topic.topicId}', '${topic.name}')" style="background: #f44336; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 120px; justify-content: center;" title="Xóa chuyên đề ôn tập">
+                        <i class="material-icons" style="font-size: 16px;">delete</i> Xóa
+                      </button>
+                      ` : ''}
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
             </div>
           </div>
           
@@ -807,36 +827,26 @@
           
           <!-- Action Buttons - Fixed at Bottom -->
           <div style="
-            padding: 20px !important;
-            border-top: 2px solid #e0e0e0 !important;
+            padding: 12px 16px !important;
+            border-top: 1px solid #e0e0e0 !important;
             background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
             flex-shrink: 0 !important;
             width: 100% !important;
             box-sizing: border-box !important;
+            text-align: center;
           ">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; max-width: 100%; margin: 0;">
-              <button onclick="exportGlobalStatisticsExcel()" class="btn" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 20px; font-size: 0.95rem; font-weight: 600; min-height: 52px;">
-                <i class="material-icons">download</i> Xuất Excel
-              </button>
-              <button onclick="exportGlobalStatistics()" class="btn btn-outline" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 20px; font-size: 0.95rem; font-weight: 600; min-height: 52px;">
-                <i class="material-icons">description</i> Xuất CSV
-              </button>
-              <button onclick="deleteAllReviewTopics()" class="btn btn-outline" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 20px; font-size: 0.95rem; font-weight: 600; min-height: 52px; background: #ffebee; color: #c62828; border-color: #ffcdd2;" onmouseover="this.style.background='#ffcdd2'" onmouseout="this.style.background='#ffebee'">
-                <i class="material-icons">delete_sweep</i> Xóa ôn tập
-              </button>
-              <button onclick="
-                // Restore original body content
-                if (window.originalBodyContent) {
-                  document.body.innerHTML = window.originalBodyContent;
-                  // Re-initialize event listeners
-                  document.addEventListener('DOMContentLoaded', function() {
-                    // Re-initialize all event listeners here
-                  });
-                }
-              " class="btn btn-outline" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 20px; font-size: 0.95rem; font-weight: 600; min-height: 52px;">
-                <i class="material-icons">close</i> Đóng
-              </button>
-            </div>
+            <button onclick="
+              // Restore original body content
+              if (window.originalBodyContent) {
+                document.body.innerHTML = window.originalBodyContent;
+                // Re-initialize event listeners
+                document.addEventListener('DOMContentLoaded', function() {
+                  // Re-initialize all event listeners here
+                });
+              }
+            " class="btn btn-outline" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 24px; font-size: 0.9rem; font-weight: 600; min-height: 44px;">
+              <i class="material-icons" style="font-size: 18px;">close</i> Đóng
+            </button>
           </div>
         </div>
       `;
@@ -844,6 +854,8 @@
       // Load online leaderboard after content is replaced
       setTimeout(() => {
         loadOnlineLeaderboard();
+        // Initialize responsive view
+        initializeResponsiveView();
       }, 100);
     }
 
@@ -910,6 +922,9 @@
               cursor: pointer;
               font-size: 14px;
               margin-top: 16px;
+              min-height: 48px;
+              width: 100%;
+              max-width: 200px;
             ">
               🔄 Tải lại
             </button>
@@ -938,40 +953,74 @@
           
           <!-- Top Users Leaderboard -->
           <h4 style="color: #800020; margin-bottom: 16px; font-size: 18px;">🏆 Bảng xếp hạng người dùng</h4>
-          <div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-              <thead style="background: #f5f5f5;">
-                <tr>
-                  <th style="padding: 12px; text-align: center; font-weight: 600; color: #333;">Hạng</th>
-                  <th style="padding: 12px; text-align: left; font-weight: 600; color: #333;">Họ tên</th>
-                  <th style="padding: 12px; text-align: left; font-weight: 600; color: #333;">Đơn vị</th>
-                  <th style="padding: 12px; text-align: left; font-weight: 600; color: #333;">Chuyên đề</th>
-                  <th style="padding: 12px; text-align: center; font-weight: 600; color: #333;">Điểm</th>
-                  <th style="padding: 12px; text-align: center; font-weight: 600; color: #333;">Kết quả</th>
-                  <th style="padding: 12px; text-align: center; font-weight: 600; color: #333;">Thời gian</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${leaderboard.slice(0, 20).map((user, index) => `
-                  <tr style="border-bottom: 1px solid #e0e0e0; ${index < 3 ? 'background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);' : ''}">
-                    <td style="padding: 12px; text-align: center; font-weight: 600;">
-                      ${index < 3 ? ['🥇', '🥈', '🥉'][index] : `#${user.rank}`}
-                    </td>
-                    <td style="padding: 12px; font-weight: 600; color: #333;">${user.fullname}</td>
-                    <td style="padding: 12px; color: #666; font-size: 14px;">${user.branch}</td>
-                    <td style="padding: 12px;">
-                      <div style="display: flex; align-items: center; gap: 6px;">
-                        <span style="color: #333;">${user.topicName}</span>
-                        ${user.isExam ? '<span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">THI</span>' : ''}
-                      </div>
-                    </td>
-                    <td style="padding: 12px; text-align: center; font-weight: 600; color: #2e7d32; font-size: 18px;">${user.score}%</td>
-                    <td style="padding: 12px; text-align: center; color: #666; font-size: 14px;">${user.correctAnswers}/${user.totalQuestions}</td>
-                    <td style="padding: 12px; text-align: center; color: #666; font-size: 12px;">${new Date(user.timestamp).toLocaleDateString('vi-VN')}</td>
+          
+          <!-- Desktop Table View -->
+          <div class="desktop-leaderboard" style="display: block;">
+            <div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                <thead style="background: #f5f5f5;">
+                  <tr>
+                    <th style="padding: 12px; text-align: center; font-weight: 600; color: #333;">Hạng</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600; color: #333;">Họ tên</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600; color: #333;">Đơn vị</th>
+                    <th style="padding: 12px; text-align: left; font-weight: 600; color: #333;">Chuyên đề</th>
+                    <th style="padding: 12px; text-align: center; font-weight: 600; color: #333;">Điểm</th>
+                    <th style="padding: 12px; text-align: center; font-weight: 600; color: #333;">Kết quả</th>
+                    <th style="padding: 12px; text-align: center; font-weight: 600; color: #333;">Thời gian</th>
                   </tr>
-                `).join('')}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  ${leaderboard.slice(0, 20).map((user, index) => `
+                    <tr style="border-bottom: 1px solid #e0e0e0; ${index < 3 ? 'background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);' : ''}">
+                      <td style="padding: 12px; text-align: center; font-weight: 600;">
+                        ${index < 3 ? ['🥇', '🥈', '🥉'][index] : `#${user.rank}`}
+                      </td>
+                      <td style="padding: 12px; font-weight: 600; color: #333;">${user.fullname}</td>
+                      <td style="padding: 12px; color: #666; font-size: 14px;">${user.branch}</td>
+                      <td style="padding: 12px;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                          <span style="color: #333;">${user.topicName}</span>
+                          ${user.isExam ? '<span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">THI</span>' : ''}
+                        </div>
+                      </td>
+                      <td style="padding: 12px; text-align: center; font-weight: 600; color: #2e7d32; font-size: 18px;">${user.score}%</td>
+                      <td style="padding: 12px; text-align: center; color: #666; font-size: 14px;">${user.correctAnswers}/${user.totalQuestions}</td>
+                      <td style="padding: 12px; text-align: center; color: #666; font-size: 12px;">${new Date(user.timestamp).toLocaleDateString('vi-VN')}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          <!-- Mobile Card View -->
+          <div class="mobile-leaderboard" style="display: none;">
+            ${leaderboard.slice(0, 20).map((user, index) => `
+              <div style="background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); ${index < 3 ? 'border: 2px solid #ffc107; background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);' : ''}">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="font-size: 24px; font-weight: 600;">
+                      ${index < 3 ? ['🥇', '🥈', '🥉'][index] : `#${user.rank}`}
+                    </div>
+                    <div>
+                      <div style="font-weight: 600; color: #333; font-size: 16px;">${user.fullname}</div>
+                      <div style="color: #666; font-size: 14px;">${user.branch}</div>
+                    </div>
+                  </div>
+                  <div style="text-align: right;">
+                    <div style="font-size: 20px; font-weight: 600; color: #2e7d32;">${user.score}%</div>
+                    <div style="color: #666; font-size: 12px;">${user.correctAnswers}/${user.totalQuestions}</div>
+                  </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="color: #333; font-size: 14px;">${user.topicName}</span>
+                    ${user.isExam ? '<span style="background: #ff9800; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">THI</span>' : ''}
+                  </div>
+                  <div style="color: #666; font-size: 12px;">${new Date(user.timestamp).toLocaleDateString('vi-VN')}</div>
+                </div>
+              </div>
+            `).join('')}
           </div>
           
           <!-- Footer -->
@@ -986,12 +1035,51 @@
               cursor: pointer;
               font-size: 12px;
               margin-top: 8px;
+              min-height: 48px;
+              width: 100%;
+              max-width: 200px;
             ">
               🔄 Cập nhật
             </button>
           </div>
         </div>
       `;
+      
+      // Initialize responsive view for leaderboard
+      initializeResponsiveView();
+    }
+    
+    // Initialize responsive view
+    function initializeResponsiveView() {
+      function updateView() {
+        const isMobile = window.innerWidth <= 768;
+        const desktopTables = document.querySelectorAll('.desktop-table');
+        const mobileCards = document.querySelectorAll('.mobile-cards');
+        const desktopLeaderboard = document.querySelectorAll('.desktop-leaderboard');
+        const mobileLeaderboard = document.querySelectorAll('.mobile-leaderboard');
+        
+        // Update topic statistics view
+        desktopTables.forEach(el => {
+          el.style.display = isMobile ? 'none' : 'block';
+        });
+        mobileCards.forEach(el => {
+          el.style.display = isMobile ? 'block' : 'none';
+        });
+        
+        // Update leaderboard view
+        desktopLeaderboard.forEach(el => {
+          el.style.display = isMobile ? 'none' : 'block';
+        });
+        mobileLeaderboard.forEach(el => {
+          el.style.display = isMobile ? 'block' : 'none';
+        });
+      }
+      
+      // Initial update
+      updateView();
+      
+      // Update on resize
+      window.addEventListener('resize', updateView);
     }
 
         function renderLists(all) {
@@ -1033,6 +1121,11 @@
                     <button onclick="exportTopicToExcel('${topic.id}')" class="btn btn-outline" style="flex: 1;" title="Xuất câu hỏi ra Excel">
                       <i class="material-icons">download</i> Excel
                     </button>
+                    ${topic.name.includes('Ôn tập câu sai') ? `
+                    <button onclick="deleteReviewTopic('${topic.id}', '${topic.name}')" class="btn btn-outline" style="flex: 1; color: #f44336; border-color: #f44336;" title="Xóa chuyên đề ôn tập">
+                      <i class="material-icons">delete</i> Xóa ôn tập
+                    </button>
+                    ` : ''}
                   </div>
                 </div>
               </div>
@@ -1058,6 +1151,11 @@
                     <button onclick="exportTopicToExcel('${exam.id}')" class="btn btn-outline" style="flex: 1;" title="Xuất câu hỏi ra Excel">
                       <i class="material-icons">download</i> Excel
                     </button>
+                    ${exam.name.includes('Ôn tập câu sai') ? `
+                    <button onclick="deleteReviewTopic('${exam.id}', '${exam.name}')" class="btn btn-outline" style="flex: 1; color: #f44336; border-color: #f44336;" title="Xóa bài thi ôn tập">
+                      <i class="material-icons">delete</i> Xóa ôn tập
+                    </button>
+                    ` : ''}
                   </div>
                 </div>
               </div>
@@ -1382,16 +1480,8 @@
           
           alert('Đã xóa chuyên đề ôn tập thành công!');
           
-          // Refresh the global statistics display
-          // Restore original body content and show statistics again
-          if (window.originalBodyContent) {
-            document.body.innerHTML = window.originalBodyContent;
-            // Re-initialize event listeners
-            document.addEventListener('DOMContentLoaded', function() {
-              // Re-initialize all event listeners here
-            });
-            showGlobalStatistics();
-          }
+          // Reload the page to refresh the topics/exams list
+          window.location.reload();
           
         } catch (error) {
           console.error('Error deleting review topic:', error);
@@ -1973,50 +2063,38 @@
 
   </div>
   
-  <footer style="background: linear-gradient(135deg, #8e0e00 0%, #1f1c18 100%); color: #fff; padding: 40px 20px 20px; margin-top: 60px; position: relative; overflow: hidden;">
+  <footer style="background: linear-gradient(135deg, #8e0e00 0%, #1f1c18 100%); color: #fff; padding: 15px 15px 10px; margin-top: 30px; position: relative; overflow: hidden;">
     <div style="max-width: 1200px; margin: 0 auto; position: relative; z-index: 1;">
-      <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 40px; margin-bottom: 30px;" class="footer-content">
-        <div style="flex: 1; min-width: 300px;">
-          <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-            <img src="logo.png" alt="Logo" style="width: 70px; height: 70px; object-fit: contain; filter: brightness(0) invert(1);">
+      <div style="display: flex !important; justify-content: space-between !important; flex-wrap: wrap !important; gap: 20px !important; margin-bottom: 12px !important;">
+        <div style="flex: 1 !important; min-width: 250px !important;">
+          <div style="display: flex !important; align-items: center !important; gap: 10px !important; margin-bottom: 8px !important;">
+            <img src="./logo.png" alt="Logo" style="width: 40px !important; height: 40px !important; object-fit: contain !important; filter: brightness(0) invert(1) !important;">
             <div>
-              <h3 style="font-size: 1.1em; margin: 0 0 5px; color: #fff; font-weight: 600;">Hệ thống ôn luyện trắc nghiệm</h3>
-              <p style="margin: 0; color: rgba(255, 255, 255, 0.8); font-size: 0.95em;">Chi nhánh Cần Thơ II</p>
+              <h3 style="font-size: 0.9em !important; margin: 0 0 2px !important; color: #fff !important; font-weight: 600 !important;">Hệ thống ôn luyện trắc nghiệm</h3>
+              <p style="margin: 0 !important; color: rgba(255, 255, 255, 0.8) !important; font-size: 0.75em !important;">Chi nhánh Cần Thơ II</p>
             </div>
           </div>
-          <p style="color: rgba(255, 255, 255, 0.8); line-height: 1.6; margin: 0;">
-            Hệ thống hỗ trợ học tập và đánh giá kiến thức thông qua các bài thi trắc nghiệm trực tuyến. 
-            Được thiết kế để mang lại trải nghiệm học tập hiệu quả và tiện lợi.
+          <p style="color: rgba(255, 255, 255, 0.7) !important; line-height: 1.4 !important; margin: 0 !important; font-size: 0.8em !important;">
+            Hệ thống hỗ trợ học tập và đánh giá kiến thức trực tuyến.
           </p>
         </div>
         
-        <div style="background: rgba(255, 255, 255, 0.05); padding: 25px; border-radius: 8px; min-width: 300px; backdrop-filter: blur(5px); border: 1px solid rgba(255, 255, 255, 0.1);">
-          <h4 style="color: #fff; margin-top: 0; margin-bottom: 20px; font-size: 1.3em; padding-bottom: 10px; border-bottom: 2px solid #800020; display: inline-block;">Liên hệ hỗ trợ</h4>
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; color: rgba(255, 255, 255, 0.9); padding: 8px 12px; border-radius: 6px; transition: all 0.3s ease;">
-            <i class="material-icons" style="color: #800020; font-size: 1.2em; min-width: 24px; text-align: center;">person</i>
-            <span>Nguyễn Thành Trung</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; color: rgba(255, 255, 255, 0.9); padding: 8px 12px; border-radius: 6px; transition: all 0.3s ease;">
-            <i class="material-icons" style="color: #800020; font-size: 1.2em; min-width: 24px; text-align: center;">phone</i>
-            <span>0947.86.86.82</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; color: rgba(255, 255, 255, 0.9); padding: 8px 12px; border-radius: 6px; transition: all 0.3s ease;">
-            <i class="material-icons" style="color: #800020; font-size: 1.2em; min-width: 24px; text-align: center;">email</i>
-            <span>trungnguyenthanh1@agribank.com.vn</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; color: rgba(255, 255, 255, 0.9); padding: 8px 12px; border-radius: 6px; transition: all 0.3s ease;">
-            <i class="material-icons" style="color: #800020; font-size: 1.2em; min-width: 24px; text-align: center;">business</i>
-            <span>Agribank Chi nhánh Cần Thơ II</span>
+        <div style="background: rgba(255, 255, 255, 0.05) !important; padding: 6px !important; border-radius: 6px !important; min-width: 250px !important; backdrop-filter: blur(5px) !important; border: 1px solid rgba(255, 255, 255, 0.1) !important;">
+          <h4 style="color: #fff !important; margin: 0 0 3px 0 !important; font-size: 0.86em !important; padding-bottom: 2px !important; border-bottom: 2px solid #800020 !important; display: inline-block !important;">Liên hệ hỗ trợ</h4>
+          <div style="color: rgba(255, 255, 255, 0.9) !important; padding: 0 !important; font-size: 0.74em !important; line-height: 1.4 !important; margin: 0 !important;">
+            <div style="margin: 0 !important; padding: 0 !important;">👤 Nguyễn Thành Trung</div>
+            <div style="margin: 0 !important; padding: 0 !important;">📞 0947.86.86.82</div>
+            <div style="margin: 0 !important; padding: 0 !important;">✉️ trungnguyenthanh1@agribank.com.vn</div>
+            <div style="margin: 0 !important; padding: 0 !important;">🏦 Agribank Chi nhánh Cần Thơ II</div>
           </div>
         </div>
       </div>
       
-      <div style="text-align: center; padding-top: 25px; margin-top: 25px; border-top: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.6); font-size: 0.9em;">
-        <strong>Bản quyền © 2025 Hệ thống ôn luyện trắc nghiệm Cần Thơ II.</strong><br>
-        Tất cả quyền được bảo lưu. Hệ thống được phát triển bởi đội ngũ IT Agribank.
+      <div style="text-align: center; padding-top: 8px; margin-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.6); font-size: 0.7em;">
+        <strong>© 2025 Hệ thống ôn luyện trắc nghiệm Cần Thơ II</strong>
       </div>
     </div>
-    <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: #800020;"></div>
+    <div style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: #800020;"></div>
   </footer>
   
   <script src="mobile-touch.js"></script>

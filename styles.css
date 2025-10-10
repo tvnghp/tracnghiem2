@@ -1750,3 +1750,9 @@ textarea:focus {
   opacity: 1 !important;
   pointer-events: auto !important;
 }
+
+/* Hide CSV export button on all platforms */
+button[onclick*="exportGlobalStatistics"],
+button[onclick*="exportWrongAnswers("]:not([onclick*="Excel"]) {
+  display: none !important;
+}

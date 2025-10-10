@@ -527,6 +527,64 @@
       align-items: center !important;
       justify-content: center !important;
     }
+    
+    /* Mobile Footer Optimization */
+    footer {
+      padding: 8px 10px 6px !important;
+      margin-top: 15px !important;
+      font-size: 11px !important;
+    }
+    
+    footer .max-width-1200px {
+      gap: 8px !important;
+      margin-bottom: 6px !important;
+    }
+    
+    footer .flex-1 {
+      min-width: 100% !important;
+      margin-bottom: 6px !important;
+    }
+    
+    footer .logo {
+      width: 24px !important;
+      height: 24px !important;
+    }
+    
+    footer h3 {
+      font-size: 0.7em !important;
+      line-height: 1.2 !important;
+    }
+    
+    footer p {
+      font-size: 0.65em !important;
+      line-height: 1.2 !important;
+    }
+    
+    footer .contact-section {
+      min-width: 100% !important;
+      padding: 8px !important;
+    }
+    
+    footer .contact-section h4 {
+      font-size: 0.75em !important;
+      margin-bottom: 4px !important;
+    }
+    
+    footer .contact-item {
+      margin-bottom: 3px !important;
+      padding: 2px 4px !important;
+    }
+    
+    footer .contact-item span {
+      font-size: 0.65em !important;
+    }
+    
+    footer .copyright {
+      padding-top: 6px !important;
+      margin-top: 6px !important;
+      font-size: 0.6em !important;
+      line-height: 1.2 !important;
+    }
   }
 </style>
 </head>
@@ -687,6 +745,36 @@
     let endTimeMs = null;
     let isPaused = false;
 
+    // Safe localStorage functions
+    function safeSetItem(key, value) {
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (e) {
+        console.warn('localStorage.setItem failed for key:', key, e);
+        return false;
+      }
+    }
+
+    function safeGetItem(key) {
+      try {
+        return localStorage.getItem(key);
+      } catch (e) {
+        console.warn('localStorage.getItem failed for key:', key, e);
+        return null;
+      }
+    }
+
+    function safeRemoveItem(key) {
+      try {
+        localStorage.removeItem(key);
+        return true;
+      } catch (e) {
+        console.warn('localStorage.removeItem failed for key:', key, e);
+        return false;
+      }
+    }
+
     // Initialize DOM elements
     function initDOMElements() {
       questionEl = document.getElementById('question');
@@ -718,6 +806,12 @@
       cancelSubmitBtn = document.getElementById('cancel-submit-btn');
       confirmSubmitBtn = document.getElementById('confirm-submit-btn');
       closeUserInfoModal = document.getElementById('close-user-info-modal');
+      
+      // Debug logging
+      console.log('DOM elements initialized:');
+      console.log('questionEl:', questionEl);
+      console.log('answersEl:', answersEl);
+      console.log('questionCounterEl:', questionCounterEl);
     }
 
 function scrollToQuestion() {
@@ -832,24 +926,60 @@ async function continueInitQuiz() {
   // Initialize DOM elements first
   initDOMElements();
   
-  topics = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
+  // Check localStorage quota and clear old data if needed
+  if (!safeSetItem('test_quota', 'test')) {
+    console.warn('localStorage quota exceeded, clearing ALL old data...');
+    clearAllCache();
+  } else {
+    safeRemoveItem('test_quota');
+  }
+  
+  // Proactively clear old cache to prevent quota issues
+  clearAllCache();
+  
+  topics = JSON.parse(safeGetItem('quiz_topics') || '[]');
+  console.log('Topics from localStorage:', topics.length);
+  console.log('Looking for topicId:', topicId);
+  
   topic = topics.find(t => t.id === topicId);
+  console.log('Topic found in localStorage:', topic ? topic.name : 'Not found');
 
   if (!topic) {
+    console.log('Topic not found in localStorage, fetching from remote...');
     try {
       const url = new URL('./topics.json', location.href);
       url.searchParams.set('v', Date.now());
       const resp = await fetch(url, { cache: 'no-store' });
       if (resp.ok) {
         const remoteTopics = await resp.json();
+        console.log('Remote topics loaded:', remoteTopics.length);
         if (Array.isArray(remoteTopics) && remoteTopics.length > 0) {
-          localStorage.setItem('quiz_topics', JSON.stringify(remoteTopics));
-          topics = remoteTopics;
-          topic = topics.find(t => t.id === topicId);
+          if (safeSetItem('quiz_topics', JSON.stringify(remoteTopics))) {
+            topics = remoteTopics;
+            topic = topics.find(t => t.id === topicId);
+            console.log('Topic found after remote fetch:', topic ? topic.name : 'Not found');
+          } else {
+            console.warn('Failed to save topics to localStorage due to quota');
+            // Clear old cache and try again
+            clearOldCache();
+            if (safeSetItem('quiz_topics', JSON.stringify(remoteTopics))) {
+              topics = remoteTopics;
+              topic = topics.find(t => t.id === topicId);
+              console.log('Topic found after clearing cache and remote fetch:', topic ? topic.name : 'Not found');
+            } else {
+              console.error('Still failed to save topics after clearing cache');
+              // Use topics directly without saving to localStorage
+              topics = remoteTopics;
+              topic = topics.find(t => t.id === topicId);
+              console.log('Using topics directly from remote (not cached):', topic ? topic.name : 'Not found');
+            }
+          }
         }
+      } else {
+        console.error('Failed to fetch remote topics:', resp.status);
       }
     } catch (e) {
-      // ignore fetch errors and fall through to error display
+      console.error('Error fetching remote topics:', e);
     }
   }
 
@@ -859,12 +989,27 @@ async function continueInitQuiz() {
   }
 
   document.getElementById('topic-name').textContent = topic.name;
+  
+  // Debug logging
+  console.log('Topic found:', topic);
+  console.log('Topic name:', topic.name);
+  console.log('Topic isExam:', topic.isExam);
+  console.log('Topic examConfig:', topic.examConfig);
+  
   // For exams, assemble questions per attempt using current topics based on examConfig
   if (topic.isExam === true && topic.examConfig && Array.isArray(topic.examConfig.distribution)) {
-    questions = getOrCreateExamSessionQuestions(topic);
+    try {
+      questions = getOrCreateExamSessionQuestions(topic);
+    } catch (e) {
+      console.error('Error getting exam session questions, using fallback:', e);
+      questions = topic.questions || [];
+    }
   } else {
     questions = topic.questions || [];
   }
+
+  console.log('Questions loaded:', questions.length);
+  console.log('First question:', questions[0]);
 
   if (questions.length === 0) {
     showError('Chuyên đề này chưa có câu hỏi!');
@@ -884,6 +1029,9 @@ async function continueInitQuiz() {
     flagged: false,
     explanationShown: false
   }));
+
+  console.log('User answers initialized:', userAnswers.length);
+  console.log('First user answer:', userAnswers[0]);
 
   // Load saved progress nếu có
   loadProgress();
@@ -937,7 +1085,7 @@ async function continueInitQuiz() {
 }
 
     function loadProgress() {
-      const savedProgress = localStorage.getItem(`quiz_progress_${topicId}`);
+      const savedProgress = safeGetItem(`quiz_progress_${topicId}`);
       if (savedProgress) {
         try {
           const progress = JSON.parse(savedProgress);
@@ -950,7 +1098,7 @@ async function continueInitQuiz() {
           } else {
             // If quiz was submitted, clear the progress and start fresh
             quizSubmitted = false;
-            localStorage.removeItem(`quiz_progress_${topicId}`);
+            safeRemoveItem(`quiz_progress_${topicId}`);
             // Reset userAnswers to fresh state
             userAnswers = questions.map((q, index) => ({
               answer: null,
@@ -973,64 +1121,176 @@ async function continueInitQuiz() {
         quizSubmitted: quizSubmitted,
         timestamp: new Date().toISOString()
       };
-      localStorage.setItem(`quiz_progress_${topicId}`, JSON.stringify(progress));
+      if (!safeSetItem(`quiz_progress_${topicId}`, JSON.stringify(progress))) {
+        console.warn('Failed to save progress due to storage quota');
+        // Try to clear old data and save again
+        clearOldCache();
+        safeSetItem(`quiz_progress_${topicId}`, JSON.stringify(progress));
+      }
     }
 
     // ===== Exam assembly per attempt =====
     function getOrCreateExamSessionQuestions(examTopic) {
       const cacheKey = `quiz_exam_questions_${examTopic.id}`;
-      const cached = localStorage.getItem(cacheKey);
+      
+      // Try to get cached questions first
+      const cached = safeGetItem(cacheKey);
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        } catch (_) {}
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            console.log('Using cached exam questions:', parsed.length);
+            return parsed;
+          }
+        } catch (e) {
+          console.warn('Error parsing cached exam questions:', e);
+        }
       }
+      
+      // Build new questions
       const built = buildExamQuestions(examTopic);
       if (Array.isArray(built) && built.length > 0) {
-        localStorage.setItem(cacheKey, JSON.stringify(built));
+        // Try to cache, but don't fail if we can't
+        if (safeSetItem(cacheKey, JSON.stringify(built))) {
+          console.log('Cached exam questions successfully');
+        } else {
+          console.log('Continuing without caching exam questions');
+        }
       }
       return built;
     }
 
+    function clearOldCache() {
+      try {
+        // Clear old exam question caches (keep only current topic)
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('quiz_exam_questions_') && key !== `quiz_exam_questions_${topicId}`) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        console.log('Cleared old exam question caches:', keysToRemove.length);
+        
+        // Clear old progress data (keep only current topic)
+        const progressKeysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('quiz_progress_') && key !== `quiz_progress_${topicId}`) {
+            progressKeysToRemove.push(key);
+          }
+        }
+        progressKeysToRemove.forEach(key => localStorage.removeItem(key));
+        console.log('Cleared old progress data:', progressKeysToRemove.length);
+        
+        // Clear old timer data (keep only current topic)
+        const timerKeysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith('quiz_timer_') || key.startsWith('quiz_custom_duration_')) && !key.includes(topicId)) {
+            timerKeysToRemove.push(key);
+          }
+        }
+        timerKeysToRemove.forEach(key => localStorage.removeItem(key));
+        console.log('Cleared old timer data:', timerKeysToRemove.length);
+        
+      } catch (e) {
+        console.error('Error clearing old cache:', e);
+      }
+    }
+
+    function clearAllCache() {
+      try {
+        console.log('Clearing ALL localStorage data...');
+        // Clear ALL quiz-related data except current topic
+        const allKeysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (
+            key.startsWith('quiz_') || 
+            key.startsWith('wrong_answers') ||
+            key.startsWith('quiz_statistics')
+          ) && !key.includes(topicId)) {
+            allKeysToRemove.push(key);
+          }
+        }
+        allKeysToRemove.forEach(key => localStorage.removeItem(key));
+        console.log('Cleared ALL quiz cache data:', allKeysToRemove.length);
+        
+        // If still not enough space, clear even more
+        if (allKeysToRemove.length > 0) {
+          try {
+            localStorage.setItem('test_quota_after_clear', 'test');
+            localStorage.removeItem('test_quota_after_clear');
+            console.log('localStorage quota is now available');
+          } catch (e) {
+            console.warn('Still quota exceeded after clearing all quiz data');
+            // Clear even more data if needed
+            const moreKeysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key && key !== 'quiz_topics' && !key.includes(topicId)) {
+                moreKeysToRemove.push(key);
+              }
+            }
+            moreKeysToRemove.forEach(key => localStorage.removeItem(key));
+            console.log('Cleared additional data:', moreKeysToRemove.length);
+          }
+        }
+        
+      } catch (e) {
+        console.error('Error clearing all cache:', e);
+      }
+    }
+
     function buildExamQuestions(examTopic) {
-      const allTopics = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
-      const dist = examTopic.examConfig?.distribution || [];
-      const total = parseInt(examTopic.examConfig?.total || 0, 10);
-      if (!Array.isArray(dist) || !Number.isFinite(total) || total <= 0) {
+      try {
+        const allTopics = JSON.parse(safeGetItem('quiz_topics') || '[]');
+        const dist = examTopic.examConfig?.distribution || [];
+        const total = parseInt(examTopic.examConfig?.total || 0, 10);
+        if (!Array.isArray(dist) || !Number.isFinite(total) || total <= 0) {
+          console.log('Using fallback questions from examTopic');
+          return examTopic.questions || [];
+        }
+
+        // Calculate allocation similar to admin builder
+        const withCalc = dist.map(d => ({ id: d.id, percent: d.percent, exact: (total * d.percent) / 100 }));
+        let allocated = withCalc.map(x => ({ id: x.id, count: Math.floor(x.exact), frac: x.exact - Math.floor(x.exact) }));
+        let assigned = allocated.reduce((s, a) => s + a.count, 0);
+        let remain = total - assigned;
+        if (remain > 0) {
+          allocated.sort((a, b) => b.frac - a.frac);
+          for (let i = 0; i < allocated.length && remain > 0; i++) { allocated[i].count += 1; remain--; }
+        }
+
+        // Sample per topic
+        const combined = [];
+        for (const a of allocated) {
+          const t = allTopics.find(t => t.id === a.id);
+          if (!t || !Array.isArray(t.questions)) {
+            // Missing topic; fallback to existing exam questions
+            console.log('Missing topic, using fallback questions');
+            return examTopic.questions || [];
+          }
+          if (a.count > t.questions.length) {
+            // Not enough questions; fallback
+            console.log('Not enough questions, using fallback questions');
+            return examTopic.questions || [];
+          }
+          const copy = t.questions.slice();
+          // shuffle
+          for (let i = copy.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [copy[i], copy[j]] = [copy[j], copy[i]]; }
+          combined.push(...copy.slice(0, a.count));
+        }
+        // final shuffle
+        for (let i = combined.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [combined[i], combined[j]] = [combined[j], combined[i]]; }
+        console.log('Built exam questions successfully:', combined.length);
+        return combined;
+      } catch (e) {
+        console.error('Error building exam questions, using fallback:', e);
         return examTopic.questions || [];
       }
-
-      // Calculate allocation similar to admin builder
-      const withCalc = dist.map(d => ({ id: d.id, percent: d.percent, exact: (total * d.percent) / 100 }));
-      let allocated = withCalc.map(x => ({ id: x.id, count: Math.floor(x.exact), frac: x.exact - Math.floor(x.exact) }));
-      let assigned = allocated.reduce((s, a) => s + a.count, 0);
-      let remain = total - assigned;
-      if (remain > 0) {
-        allocated.sort((a, b) => b.frac - a.frac);
-        for (let i = 0; i < allocated.length && remain > 0; i++) { allocated[i].count += 1; remain--; }
-      }
-
-      // Sample per topic
-      const combined = [];
-      for (const a of allocated) {
-        const t = allTopics.find(t => t.id === a.id);
-        if (!t || !Array.isArray(t.questions)) {
-          // Missing topic; fallback to existing exam questions
-          return examTopic.questions || [];
-        }
-        if (a.count > t.questions.length) {
-          // Not enough questions; fallback
-          return examTopic.questions || [];
-        }
-        const copy = t.questions.slice();
-        // shuffle
-        for (let i = copy.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [copy[i], copy[j]] = [copy[j], copy[i]]; }
-        combined.push(...copy.slice(0, a.count));
-      }
-      // final shuffle
-      for (let i = combined.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [combined[i], combined[j]] = [combined[j], combined[i]]; }
-      return combined;
     }
 
     // Determine duration: Only exams have/ask for duration.
@@ -1179,42 +1439,63 @@ async function continueInitQuiz() {
       const question = questions[index];
       const userAnswer = userAnswers[index];
       
+      // Debug logging
+      console.log('showQuestion called with index:', index);
+      console.log('question:', question);
+      console.log('questionEl:', questionEl);
+      console.log('answersEl:', answersEl);
+      
       // Update question number display (single source)
       if (questionCounterEl) {
         questionCounterEl.textContent = `Câu ${index + 1}/${questions.length}`;
       }
       
-      // Update question text
-      questionEl.textContent = question.question;
+      // Update question text - with safety check
+      if (questionEl && question) {
+        questionEl.textContent = question.question;
+      } else {
+        console.error('questionEl or question is null:', { questionEl, question });
+      }
       
       // Update answers
-      answersEl.innerHTML = '';
-      question.optionLabels.forEach((label, i) => {
-        const answer = question.options[i];
-        const answerEl = document.createElement('div');
-        const isSelected = userAnswer.answer === label;
-        const isCorrect = label === question.answer;
-        const reveal = quizSubmitted || userAnswer.answer !== null;
+      if (answersEl) {
+        answersEl.innerHTML = '';
+        console.log('Question optionLabels:', question.optionLabels);
+        console.log('Question options:', question.options);
         
-        let answerClass = 'answer';
-        if (isSelected) answerClass += ' selected';
-        if (reveal) {
-          if (isCorrect) answerClass += ' correct';
-          if (isSelected && !isCorrect) answerClass += ' incorrect';
+        if (question.optionLabels && question.options) {
+          question.optionLabels.forEach((label, i) => {
+            const answer = question.options[i];
+            const answerEl = document.createElement('div');
+            const isSelected = userAnswer.answer === label;
+            const isCorrect = label === question.answer;
+            const reveal = quizSubmitted || userAnswer.answer !== null;
+            
+            let answerClass = 'answer';
+            if (isSelected) answerClass += ' selected';
+            if (reveal) {
+              if (isCorrect) answerClass += ' correct';
+              if (isSelected && !isCorrect) answerClass += ' incorrect';
+            }
+            
+            answerEl.className = answerClass;
+            answerEl.innerHTML = `
+              <span class="option">${label}.</span>
+              <span class="text">${answer}</span>
+            `;
+            
+            if (!quizSubmitted) {
+              answerEl.onclick = () => selectAnswer(label);
+            }
+            
+            answersEl.appendChild(answerEl);
+          });
+        } else {
+          console.error('Missing optionLabels or options:', { optionLabels: question.optionLabels, options: question.options });
         }
-        
-        answerEl.className = answerClass;
-        answerEl.innerHTML = `
-          <span class="option">${label}.</span>
-          <span class="text">${answer}</span>
-        `;
-        
-        if (!quizSubmitted) {
-          answerEl.onclick = () => selectAnswer(label);
-        }
-        
-        answersEl.appendChild(answerEl);
-      });
+      } else {
+        console.error('answersEl is null');
+      }
 
       // Update flag button
       updateFlagButton();
@@ -2264,50 +2545,38 @@ function updateNextBtnStatus(){
       initQuiz();
     }
   </script>
-  <footer style="background: linear-gradient(135deg, #8e0e00 0%, #1f1c18 100%); color: #fff; padding: 40px 20px 20px; margin-top: 60px; position: relative; overflow: hidden;">
+  <footer style="background: linear-gradient(135deg, #8e0e00 0%, #1f1c18 100%); color: #fff; padding: 15px 15px 10px; margin-top: 30px; position: relative; overflow: hidden;">
     <div style="max-width: 1200px; margin: 0 auto; position: relative; z-index: 1;">
-      <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 40px; margin-bottom: 30px;">
-        <div style="flex: 1; min-width: 300px;">
-          <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-            <img src="logo.png" alt="Logo" style="width: 70px; height: 70px; object-fit: contain; filter: brightness(0) invert(1);">
+      <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 20px; margin-bottom: 12px;">
+        <div style="flex: 1; min-width: 250px;">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <img src="logo.png" alt="Logo" style="width: 40px; height: 40px; object-fit: contain; filter: brightness(0) invert(1);">
             <div>
-              <h3 style="font-size: 1.1em; margin: 0 0 5px; color: #fff; font-weight: 600;">Hệ thống ôn luyện trắc nghiệm</h3>
-              <p style="margin: 0; color: rgba(255, 255, 255, 0.8); font-size: 0.95em;">Chi nhánh Cần Thơ II</p>
+              <h3 style="font-size: 0.9em; margin: 0 0 2px; color: #fff; font-weight: 600;">Hệ thống ôn luyện trắc nghiệm</h3>
+              <p style="margin: 0; color: rgba(255, 255, 255, 0.8); font-size: 0.75em;">Chi nhánh Cần Thơ II</p>
             </div>
           </div>
-          <p style="color: rgba(255, 255, 255, 0.8); line-height: 1.6; margin: 0;">
-            Hệ thống hỗ trợ học tập và đánh giá kiến thức thông qua các bài thi trắc nghiệm trực tuyến. 
-            Được thiết kế để mang lại trải nghiệm học tập hiệu quả và tiện lợi.
+          <p style="color: rgba(255, 255, 255, 0.7); line-height: 1.4; margin: 0; font-size: 0.8em;">
+            Hệ thống hỗ trợ học tập và đánh giá kiến thức trực tuyến.
           </p>
         </div>
         
-        <div style="background: rgba(255, 255, 255, 0.05); padding: 25px; border-radius: 8px; min-width: 300px; backdrop-filter: blur(5px); border: 1px solid rgba(255, 255, 255, 0.1);">
-          <h4 style="color: #fff; margin-top: 0; margin-bottom: 20px; font-size: 1.3em; padding-bottom: 10px; border-bottom: 2px solid #800020; display: inline-block;">Liên hệ hỗ trợ</h4>
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; color: rgba(255, 255, 255, 0.9); padding: 8px 12px; border-radius: 6px; transition: all 0.3s ease;">
-            <i class="material-icons" style="color: #800020; font-size: 1.2em; min-width: 24px; text-align: center;">person</i>
-            <span>Nguyễn Thành Trung</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; color: rgba(255, 255, 255, 0.9); padding: 8px 12px; border-radius: 6px; transition: all 0.3s ease;">
-            <i class="material-icons" style="color: #800020; font-size: 1.2em; min-width: 24px; text-align: center;">phone</i>
-            <span>0947.86.86.82</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; color: rgba(255, 255, 255, 0.9); padding: 8px 12px; border-radius: 6px; transition: all 0.3s ease;">
-            <i class="material-icons" style="color: #800020; font-size: 1.2em; min-width: 24px; text-align: center;">email</i>
-            <span>trungnguyenthanh1@agribank.com.vn</span>
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 15px; color: rgba(255, 255, 255, 0.9); padding: 8px 12px; border-radius: 6px; transition: all 0.3s ease;">
-            <i class="material-icons" style="color: #800020; font-size: 1.2em; min-width: 24px; text-align: center;">business</i>
-            <span>Agribank Chi nhánh Cần Thơ II</span>
+        <div style="background: rgba(255, 255, 255, 0.05); padding: 6px; border-radius: 6px; min-width: 250px; backdrop-filter: blur(5px); border: 1px solid rgba(255, 255, 255, 0.1);">
+          <h4 style="color: #fff; margin: 0 0 3px 0; font-size: 0.86em; padding-bottom: 2px; border-bottom: 2px solid #800020; display: inline-block;">Liên hệ hỗ trợ</h4>
+          <div style="color: rgba(255, 255, 255, 0.9); padding: 0; font-size: 0.74em; line-height: 1.4; margin: 0;">
+            <div style="margin: 0; padding: 0;">👤 Nguyễn Thành Trung</div>
+            <div style="margin: 0; padding: 0;">📞 0947.86.86.82</div>
+            <div style="margin: 0; padding: 0;">✉️ trungnguyenthanh1@agribank.com.vn</div>
+            <div style="margin: 0; padding: 0;">🏦 Agribank Chi nhánh Cần Thơ II</div>
           </div>
         </div>
       </div>
       
-      <div style="text-align: center; padding-top: 25px; margin-top: 25px; border-top: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.6); font-size: 0.9em;">
-        <strong>Bản quyền © 2025 Hệ thống ôn luyện trắc nghiệm Cần Thơ II.</strong><br>
-        Tất cả quyền được bảo lưu. Hệ thống được phát triển bởi đội ngũ IT Agribank.
+      <div style="text-align: center; padding-top: 8px; margin-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.6); font-size: 0.7em;">
+        <strong>© 2025 Hệ thống ôn luyện trắc nghiệm Cần Thơ II</strong>
       </div>
     </div>
-    <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: #800020;"></div>
+    <div style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: #800020;"></div>
   </footer>
   <script src="mobile-touch.js"></script>
 </body>
