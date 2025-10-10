@@ -8,14 +8,14 @@ function checkAuth() {
   return localStorage.getItem('admin_authenticated') === 'true';
 }
 
-function handleLogin(e) {
+async function handleLogin(e) {
   e.preventDefault();
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
   
   if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
     safeLocalStorageSet('admin_authenticated', 'true');
-    showAdminPanel();
+    await showAdminPanel();
   } else {
     alert('Tên đăng nhập hoặc mật khẩu không đúng!');
   }
