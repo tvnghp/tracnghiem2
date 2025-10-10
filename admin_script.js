@@ -1599,4 +1599,40 @@ document.addEventListener('DOMContentLoaded', function() {
   
   const importFileInput = document.getElementById('import-json-file');
   if (importFileInput) importFileInput.addEventListener('change', handleImportFile);
+  
+  // Test Google Sheets connection
+  const testGoogleSheetsBtn = document.getElementById('test-google-sheets-btn');
+  if (testGoogleSheetsBtn) testGoogleSheetsBtn.addEventListener('click', async function() {
+    await testGoogleSheetsConnection();
+  });
 });
+
+// Test Google Sheets connection function
+async function testGoogleSheetsConnection() {
+  if (!window.QUIZ_CONFIG || !window.isConfigured()) {
+    alert('Google Sheets chưa được cấu hình!\n\nVui lòng kiểm tra file config.js và đảm bảo:\n- GOOGLE_SCRIPT_URL đã được thiết lập\n- ENABLE_CLOUD_SYNC = true');
+    return;
+  }
+
+  try {
+    console.log('Testing Google Sheets connection...');
+    console.log('Google Script URL:', window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL);
+    
+    const response = await fetch(`${window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL}?action=test`, {
+      method: 'GET',
+      mode: 'cors'
+    });
+    
+    const text = await response.text();
+    console.log('Test response:', text);
+    
+    if (text.includes('working')) {
+      alert('✅ Kết nối Google Sheets thành công!\n\n' + text + '\n\nBạn có thể sử dụng tính năng thống kê từ Google Sheets.');
+    } else {
+      alert('⚠️ Google Sheets phản hồi nhưng có thể có vấn đề:\n\n' + text + '\n\nVui lòng kiểm tra cấu hình Google Apps Script.');
+    }
+  } catch (error) {
+    console.error('Google Sheets test error:', error);
+    alert('❌ Không thể kết nối Google Sheets:\n\n' + error.message + '\n\nVui lòng kiểm tra:\n- URL Google Script trong config.js\n- Cấu hình CORS trong Google Apps Script\n- Quyền truy cập "Anyone" trong deployment\n- Kết nối internet');
+  }
+}

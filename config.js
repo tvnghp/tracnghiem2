@@ -21,7 +21,7 @@
 // BƯỚC 3: Cấu hình
 const CONFIG = {
   // Paste Web app URL của bạn vào đây (sau khi deploy Apps Script)
-  GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyfN_61wdm6frnVKqK9XarJf1Pt_MXSThRkP_opCdeJX7ntQolsvnE28A7mlr1_hxvV/exec',
+  GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwMlA1bsXBOiIGCsfEPmqicd4RuSlI9L5S0dgUSZl2Zr_r5hmCfCa3FCL1x-Riz5zAs/exec',
   
   // Bật/tắt tính năng gửi dữ liệu lên Google Sheets
   ENABLE_CLOUD_SYNC: true,

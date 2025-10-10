@@ -338,12 +338,41 @@
 
 
         if (globalStatsBtn) {
-          globalStatsBtn.addEventListener('click', function() {
-            showGlobalStatistics();
+          globalStatsBtn.addEventListener('click', async function() {
+            await showGlobalStatistics();
           });
         }
 
-    function showGlobalStatistics() {
+
+    // Test Google Sheets connection
+    async function testGoogleSheetsConnection() {
+      if (!window.QUIZ_CONFIG || !window.isConfigured()) {
+        alert('Google Sheets chưa được cấu hình!');
+        return;
+      }
+
+      try {
+        console.log('Testing Google Sheets connection...');
+        const response = await fetch(`${window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL}?action=test`, {
+          method: 'GET',
+          mode: 'cors'
+        });
+        
+        const text = await response.text();
+        console.log('Test response:', text);
+        
+        if (text.includes('working')) {
+          alert('✅ Kết nối Google Sheets thành công!\n\n' + text);
+        } else {
+          alert('⚠️ Google Sheets phản hồi nhưng có thể có vấn đề:\n\n' + text);
+        }
+      } catch (error) {
+        console.error('Google Sheets test error:', error);
+        alert('❌ Không thể kết nối Google Sheets:\n\n' + error.message + '\n\nVui lòng kiểm tra:\n- URL Google Script\n- Cấu hình CORS\n- Quyền truy cập');
+      }
+    }
+
+    async function showGlobalStatistics() {
       // Remove any existing global statistics modal
       const existingModal = document.querySelector('.global-statistics-modal');
       if (existingModal) {
@@ -362,11 +391,100 @@
       const originalBodyContent = document.body.innerHTML;
       window.originalBodyContent = originalBodyContent;
       
-      const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
-      const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
+      // Thử lấy dữ liệu từ Google Sheets trước
+      let allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
+      let allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
+      
+      // Nếu có cấu hình Google Sheets, thử lấy dữ liệu từ đó
+      if (window.QUIZ_CONFIG && window.QUIZ_CONFIG.ENABLE_CLOUD_SYNC && window.isConfigured()) {
+        try {
+          console.log('Trying to load statistics from Google Sheets...');
+          console.log('Google Script URL:', window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL);
+          
+          const response = await fetch(`${window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL}?action=getStatistics`, {
+            method: 'GET',
+            mode: 'cors',
+            headers: {
+              'Accept': 'application/json',
+            }
+          });
+          
+          console.log('Response status:', response.status);
+          console.log('Response headers:', response.headers);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const result = await response.json();
+          console.log('Raw response from Google Sheets:', result);
+          
+          if (result.success && result.data) {
+            console.log('Loaded statistics from Google Sheets:', result.data);
+            
+            // Chuyển đổi dữ liệu từ Google Sheets sang format localStorage
+            const googleStats = result.data.topicStats || [];
+            const googleWrongAnswers = result.data.frequentWrongAnswers || [];
+            
+            if (googleStats.length > 0) {
+              // Merge với dữ liệu localStorage (ưu tiên Google Sheets)
+              allStats = googleStats.map(stat => ({
+                topicId: stat.topicId,
+                topicName: stat.topicName,
+                timestamp: new Date().toISOString(), // Dùng thời gian hiện tại
+                totalQuestions: stat.totalQuestions,
+                correctAnswers: stat.totalCorrect,
+                wrongAnswers: stat.totalWrong,
+                score: stat.avgScore,
+                isExam: stat.isExam,
+                fullname: 'Google Sheets Data',
+                branch: 'Online'
+              }));
+              
+              console.log('Converted Google Sheets stats:', allStats);
+            }
+            
+            if (googleWrongAnswers.length > 0) {
+              // Chuyển đổi wrong answers
+              allWrongAnswers = googleWrongAnswers.map(wrong => ({
+                questionIndex: 0,
+                question: wrong.question,
+                options: [wrong.optionA, wrong.optionB, wrong.optionC, wrong.optionD],
+                optionLabels: ['A', 'B', 'C', 'D'],
+                correctAnswer: wrong.correctAnswer,
+                userAnswer: 'Unknown',
+                explanation: '',
+                topicId: 'unknown',
+                topicName: wrong.topicName,
+                timestamp: new Date().toISOString()
+              }));
+              
+              console.log('Converted Google Sheets wrong answers:', allWrongAnswers);
+            }
+          } else {
+            console.log('Google Sheets response not successful or no data:', result);
+          }
+        } catch (error) {
+          console.error('Error loading from Google Sheets:', error);
+          console.log('Falling back to localStorage data');
+        }
+      } else {
+        console.log('Google Sheets not configured or disabled');
+      }
       
       if (allStats.length === 0) {
-        alert('Chưa có dữ liệu thống kê nào! Hãy làm một số bài quiz trước.');
+        // Hiển thị thông tin về các chuyên đề có sẵn thay vì chỉ báo lỗi
+        const allTopics = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
+        const topicsCount = allTopics.filter(t => !t.isExam).length;
+        const examsCount = allTopics.filter(t => t.isExam).length;
+        
+        const message = `Chưa có dữ liệu thống kê nào!\n\n` +
+                       `Hiện tại có sẵn:\n` +
+                       `• ${topicsCount} chuyên đề ôn tập\n` +
+                       `• ${examsCount} bài thi\n\n` +
+                       `Hãy làm một số bài quiz để xem thống kê chi tiết!`;
+        
+        alert(message);
         return;
       }
       
@@ -596,7 +714,7 @@
           
           </div> <!-- End Main Content Container -->
           
-          <!-- Action Buttons -->
+          <!-- Action Buttons - Fixed at Bottom -->
           <div style="
             padding: 20px !important;
             border-top: 2px solid #e0e0e0 !important;
@@ -629,26 +747,6 @@
               </button>
             </div>
           </div>
-          
-          <!-- Footer -->
-          <footer style="
-            background: linear-gradient(135deg, #800020 0%, #a00030 100%) !important;
-            color: white !important;
-            padding: 20px !important;
-            text-align: center !important;
-            flex-shrink: 0 !important;
-            width: 100% !important;
-            box-sizing: border-box !important;
-          ">
-            <div style="max-width: 1200px; margin: 0 auto;">
-              <p style="margin: 0 0 8px; font-size: 14px; font-weight: 500;">
-                Bản quyền © 2025 Hệ thống ôn luyện trắc nghiệm Cần Thơ II.
-              </p>
-              <p style="margin: 0; font-size: 13px; opacity: 0.9;">
-                Liên hệ: Nguyễn Thành Trung | Cellphone: 0947.86.86.82 | Email: trungnguyenthanh1@agribank.com.vn
-              </p>
-            </div>
-          </footer>
         </div>
       `;
       
