@@ -1,4 +1,4 @@
-const CACHE_NAME = 'quiz-cantho-v2-android';
+const CACHE_NAME = 'quiz-cantho-v3-indexeddb-20250111';
 const urlsToCache = [
   './',
   './index.html',
@@ -7,6 +7,9 @@ const urlsToCache = [
   './styles.css',
   './mobile-enhancements.css',
   './mobile-touch.js',
+  './config.js',
+  './indexeddb-storage.js',
+  './storage-wrapper.js',
   './logo.png',
   './topics.json',
   './manifest.json'
@@ -14,12 +17,36 @@ const urlsToCache = [
 
 // Install event
 self.addEventListener('install', function(event) {
+  // Skip waiting to activate new service worker immediately
+  self.skipWaiting();
+  
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(function(cache) {
-        console.log('Opened cache');
+        console.log('✅ Service Worker: Opened cache', CACHE_NAME);
         return cache.addAll(urlsToCache);
       })
+  );
+});
+
+// Activate event - delete old caches
+self.addEventListener('activate', function(event) {
+  console.log('🔄 Service Worker: Activating...');
+  
+  event.waitUntil(
+    caches.keys().then(function(cacheNames) {
+      return Promise.all(
+        cacheNames.map(function(cacheName) {
+          if (cacheName !== CACHE_NAME) {
+            console.log('🗑️ Service Worker: Deleting old cache:', cacheName);
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(function() {
+      // Take control of all pages immediately
+      return self.clients.claim();
+    })
   );
 });
 

@@ -21,9 +21,11 @@
 // BƯỚC 3: Cấu hình
 const CONFIG = {
   // Paste Web app URL của bạn vào đây (sau khi deploy Apps Script)
-  GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbwMlA1bsXBOiIGCsfEPmqicd4RuSlI9L5S0dgUSZl2Zr_r5hmCfCa3FCL1x-Riz5zAs/exec',
+  GOOGLE_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyu_KfkYkyeI7Wa4lS_zBONHe7OGXYbz43t-7S19Vl3-B25UTZmAgT2-0wc3FM4aVuG/exec',
   
   // Bật/tắt tính năng gửi dữ liệu lên Google Sheets
+  // false = CHỈ lưu LOCAL (localStorage), KHÔNG gửi lên Google Sheets
+  // true = Lưu local VÀ có thể gửi lên Google Sheets
   ENABLE_CLOUD_SYNC: true,
   
   // Tự động gửi khi nộp bài (true) hoặc hỏi người dùng (false)

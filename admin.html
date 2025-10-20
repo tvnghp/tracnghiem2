@@ -683,7 +683,7 @@
   <div id="login-container" class="container">
     <div class="login-form">
       <div class="logo">
-        <img src="logo.png" alt="Logo" id="logo-img" style="height: 60px;">
+        <img src="logo.png" alt="Logo" id="logo-img" style="height: 60px;" onerror="console.error('Logo load failed:', this.src);">
         <h2>Đăng nhập quản trị</h2>
       </div>
       <form id="login-form">
@@ -698,6 +698,11 @@
         <button type="submit" class="btn">
           <i class="material-icons">login</i> Đăng nhập
         </button>
+        <div style="text-align: center; margin-top: 16px;">
+          <a href="#" id="forgot-password-link" style="color: #800020; text-decoration: underline; font-size: 0.9rem;">
+            Quên mật khẩu? Click để reset về mặc định
+          </a>
+        </div>
       </form>
     </div>
   </div>
@@ -705,13 +710,16 @@
   <div id="admin-container" class="container" style="display: none;">
     <header>
       <div class="logo">
-        <img src="logo.png" alt="Logo" id="admin-logo">
+        <img src="logo.png" alt="Logo" id="admin-logo" onerror="console.error('Logo load failed:', this.src);">
         <div class="logo-text">
           <h1>Quản trị chuyên đề</h1>
           <p>Hệ thống ôn luyện trắc nghiệm Chi nhánh Cần Thơ II</p>
         </div>
       </div>
       <div style="display:flex; gap:8px; align-items:center;">
+        <button id="change-password-btn" class="btn" title="Đổi mật khẩu quản trị" style="background: #800020; border-color: #800020; color: #fff;">
+          <i class="material-icons">lock</i> Đổi mật khẩu
+        </button>
         <button id="logout-btn" class="btn btn-outline">
           <i class="material-icons">logout</i> Đăng xuất
         </button>
@@ -831,9 +839,9 @@
       <!-- Edit Topic Modal -->
       <div id="edit-topic-modal" class="modal hidden">
         <div class="modal-content">
-          <div class="modal-header">
-            <i class="material-icons">edit</i>
-            <h3>Sửa chuyên đề</h3>
+          <div class="modal-header" style="background: #8B0000; color: white; border-radius: 12px 12px 0 0; padding: 20px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <i class="material-icons" style="font-size: 24px; background: rgba(255,255,255,0.2); padding: 8px; border-radius: 8px;">edit</i>
+            <h3 style="margin: 0; font-size: 1.4rem; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.1); color: white !important;">Sửa chuyên đề</h3>
           </div>
           <div class="modal-body">
             <form id="edit-topic-form">
@@ -866,9 +874,9 @@
       <!-- Edit Exam Modal -->
       <div id="edit-exam-modal" class="modal hidden">
         <div class="modal-content">
-          <div class="modal-header">
-            <i class="material-icons">edit</i>
-            <h3>Sửa bài thi</h3>
+          <div class="modal-header" style="background: #8B0000; color: white; border-radius: 12px 12px 0 0; padding: 20px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <i class="material-icons" style="font-size: 24px; background: rgba(255,255,255,0.2); padding: 8px; border-radius: 8px;">edit</i>
+            <h3 style="margin: 0; font-size: 1.4rem; font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,0.1); color: white !important;">Sửa bài thi</h3>
           </div>
           <div class="modal-body">
             <form id="edit-exam-form">
@@ -912,6 +920,47 @@
             </button>
             <button type="submit" form="edit-exam-form" class="btn">
               <i class="material-icons">save</i> Lưu thay đổi
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Change Password Modal -->
+      <div id="change-password-modal" class="modal hidden">
+        <div class="modal-content" style="max-width: 500px;">
+          <div class="modal-header" style="background: linear-gradient(135deg, #800020 0%, #c72c41 100%);">
+            <i class="material-icons" style="color: #fff; font-size: 2rem;">lock</i>
+            <h3 style="color: #fff; margin: 0; font-size: 1.6rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,0.3);">Đổi mật khẩu quản trị</h3>
+          </div>
+          <div class="modal-body">
+            <form id="change-password-form">
+              <div class="form-group">
+                <label for="change-current-password">Mật khẩu hiện tại</label>
+                <input type="password" id="change-current-password" required placeholder="Nhập mật khẩu hiện tại">
+              </div>
+              <div class="form-group">
+                <label for="change-new-username">Tên đăng nhập mới (tùy chọn)</label>
+                <input type="text" id="change-new-username" placeholder="Để trống nếu không đổi">
+                <small style="display: block; margin-top: 4px; color: #6c757d;">Để trống nếu chỉ muốn đổi mật khẩu</small>
+              </div>
+              <div class="form-group">
+                <label for="change-new-password">Mật khẩu mới</label>
+                <input type="password" id="change-new-password" required placeholder="Nhập mật khẩu mới">
+                <small style="display: block; margin-top: 4px; color: #6c757d;">Tối thiểu 6 ký tự</small>
+              </div>
+              <div class="form-group">
+                <label for="change-confirm-password">Xác nhận mật khẩu mới</label>
+                <input type="password" id="change-confirm-password" required placeholder="Nhập lại mật khẩu mới">
+              </div>
+            </form>
+          </div>
+          <div class="modal-actions">
+            <span id="change-password-msg" style="flex: 1; color: #6c757d; font-size: 0.9rem;"></span>
+            <button type="button" id="change-password-cancel" class="btn btn-outline">
+              <i class="material-icons">close</i> Hủy
+            </button>
+            <button type="submit" form="change-password-form" class="btn" style="background: #800020; border-color: #800020; color: #fff;">
+              <i class="material-icons">save</i> Đổi mật khẩu
             </button>
           </div>
         </div>
@@ -980,13 +1029,21 @@
         <button id="export-json-btn" class="btn" title="Tải xuống dữ liệu topics.json">
           <i class="material-icons">file_download</i> Tải xuống topics.json
         </button>
-        <button id="import-json-btn" class="btn" title="Import file topics.json từ máy" style="background: #28a745; border-color: #28a745;">
+        <button id="import-json-btn" class="btn" title="Import file topics.json từ máy" style="background: #800020; border-color: #800020; color: #fff;">
           <i class="material-icons">file_upload</i> Import topics.json
         </button>
-        <button id="test-google-sheets-btn" class="btn btn-outline" title="Test kết nối Google Sheets" style="background: #ff9800; border-color: #ff9800; color: white;">
+        <button id="load-topics-btn" class="btn" title="Tải dữ liệu từ topics.json" style="background: #28a745; border-color: #28a745; color: #fff;">
+          <i class="material-icons">cloud_download</i> Tải dữ liệu
+        </button>
+        <button id="test-google-sheets-btn" class="btn" title="Test kết nối Google Sheets" style="background: #800020; border-color: #800020; color: #fff;">
           <i class="material-icons">cloud_done</i> Test Google Sheets
         </button>
+        <button id="merge-json-btn" class="btn" title="Gộp 2 file JSON và loại bỏ trùng lặp" style="background: #800020; border-color: #800020; color: #fff;">
+          <i class="material-icons">merge_type</i> Merge JSON
+        </button>
         <input type="file" id="import-json-file" accept=".json" style="display: none;">
+        <input type="file" id="merge-json-file-1" accept=".json" style="display: none;">
+        <input type="file" id="merge-json-file-2" accept=".json" style="display: none;">
       </div>
     </div>
   </div>
@@ -998,7 +1055,9 @@
       <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 20px; margin-bottom: 12px;">
         <div style="flex: 1; min-width: 250px;">
           <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-            <img src="logo.png" alt="Logo" style="width: 40px; height: 40px; object-fit: contain; filter: brightness(0) invert(1);">
+            <div style="width: 35px !important; height: 35px !important; background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important; border-radius: 8px !important; padding: 2px !important; border: 2px solid rgba(255,255,255,0.9) !important; box-shadow: 0 3px 8px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.8) !important; display: flex !important; align-items: center !important; justify-content: center !important; transition: all 0.3s ease !important; position: relative !important; overflow: hidden !important;" onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2), 0 2px 6px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.9)'" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 3px 8px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.8)'">
+              <img src="logo-new.png?v=20250112" alt="Logo Agribank" style="width: 100% !important; height: 100% !important; object-fit: contain !important; filter: none !important; -webkit-filter: none !important; -moz-filter: none !important; -ms-filter: none !important; -o-filter: none !important; transition: all 0.3s ease !important;" onerror="console.error('Logo load failed:', this.src); this.style.display='none';">
+            </div>
             <div>
               <h3 style="font-size: 0.9em; margin: 0 0 2px; color: #fff; font-weight: 600;">Hệ thống ôn luyện trắc nghiệm</h3>
               <p style="margin: 0; color: rgba(255, 255, 255, 0.8); font-size: 0.75em;">Chi nhánh Cần Thơ II</p>
@@ -1028,6 +1087,29 @@
   </footer>
   
   <script src="config.js"></script>
+  <script src="indexeddb-storage.js"></script>
+  <script src="storage-wrapper.js"></script>
+  <script src="quiz-storage-helper.js"></script>
+  
+  <!-- Auto-cleanup: Xóa localStorage cũ -->
+  <script>
+    (function() {
+      const keysToKeep = ['admin_credentials', 'admin_authenticated', 'deleted_review_topics', 'deleted_review_topics_map'];
+      const keysToRemove = [];
+      
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && !keysToKeep.includes(key)) {
+          keysToRemove.push(key);
+        }
+      }
+      
+      if (keysToRemove.length > 0) {
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+      }
+    })();
+  </script>
+  
   <script src="admin_script.js"></script>
   <script src="exam_builder_combobox.js"></script>
   <script src="mobile-touch.js"></script>

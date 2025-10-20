@@ -26,24 +26,53 @@ function doPost(e) {
       return handleGetStatistics(data);
     }
     
-    return createResponse(false, 'Unknown action');
+    return {
+      success: false,
+      message: 'Unknown action',
+      data: null
+    };
   } catch (error) {
-    return createResponse(false, 'Error: ' + error.message);
+    return {
+      success: false,
+      message: 'Error: ' + error.message,
+      data: null
+    };
   }
 }
 
 function doGet(e) {
   const action = e.parameter.action;
+  const callback = e.parameter.callback;
+  
+  let result;
   
   if (action === 'getStatistics') {
-    return handleGetStatistics(e.parameter);
+    result = handleGetStatistics(e.parameter);
   } else if (action === 'getLeaderboard') {
-    return handleGetLeaderboard(e.parameter);
+    result = handleGetLeaderboard(e.parameter);
+  } else if (action === 'getWrongAnswers') {
+    result = handleGetWrongAnswers(e.parameter);
   } else if (action === 'test') {
-    return ContentService.createTextOutput('Google Apps Script is working!');
+    result = {
+      success: true,
+      message: 'Google Apps Script is working!',
+      data: { status: 'OK', timestamp: new Date().toISOString() }
+    };
+  } else {
+    result = {
+      success: false,
+      message: 'Unknown action: ' + (action || 'none'),
+      availableActions: ['getStatistics', 'getLeaderboard', 'getWrongAnswers', 'test']
+    };
   }
   
-  return ContentService.createTextOutput('Quiz Statistics API is running');
+  // Support JSONP if callback is provided
+  if (callback) {
+    const jsonpResponse = callback + '(' + JSON.stringify(result) + ');';
+    return ContentService.createTextOutput(jsonpResponse).setMimeType(ContentService.MimeType.JAVASCRIPT);
+  } else {
+    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 // Xử lý submit quiz
@@ -114,7 +143,11 @@ function handleSubmitQuiz(data) {
     });
   }
   
-  return createResponse(true, 'Data saved successfully');
+  return {
+    success: true,
+    message: 'Data saved successfully',
+    data: null
+  };
 }
 
 // Lấy thống kê
@@ -124,7 +157,11 @@ function handleGetStatistics(params) {
   const wrongAnswersSheet = ss.getSheetByName('WrongAnswers');
   
   if (!submissionsSheet) {
-    return createResponse(false, 'No data available');
+    return {
+      success: false,
+      message: 'No data available',
+      data: null
+    };
   }
   
   // Lấy dữ liệu submissions
@@ -213,7 +250,11 @@ function handleGetStatistics(params) {
     lastUpdate: new Date().toISOString()
   };
   
-  return createResponse(true, 'Success', result);
+  return {
+    success: true,
+    message: 'Success',
+    data: result
+  };
 }
 
 // Lấy bảng xếp hạng người dùng
@@ -222,7 +263,11 @@ function handleGetLeaderboard(params) {
   const submissionsSheet = ss.getSheetByName('Submissions');
   
   if (!submissionsSheet) {
-    return createResponse(false, 'No data available');
+    return {
+      success: false,
+      message: 'No data available',
+      data: null
+    };
   }
   
   // Lấy dữ liệu submissions
@@ -286,7 +331,95 @@ function handleGetLeaderboard(params) {
     lastUpdate: new Date().toISOString()
   };
   
-  return createResponse(true, 'Success', result);
+  return {
+    success: true,
+    message: 'Success',
+    data: result
+  };
+}
+
+// Get all wrong answers from Google Sheets
+function handleGetWrongAnswers(params) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const wrongAnswersSheet = ss.getSheetByName('WrongAnswers');
+    
+    if (!wrongAnswersSheet) {
+      return {
+        success: true,
+        message: 'No wrong answers sheet found',
+        data: []
+      };
+    }
+    
+    // Get all data
+    const data = wrongAnswersSheet.getDataRange().getValues();
+    if (data.length <= 1) { // Only headers or empty
+      return {
+        success: true,
+        message: 'No wrong answers found',
+        data: []
+      };
+    }
+    
+    const headers = data[0];
+    const rows = data.slice(1);
+    
+    // Convert to JSON
+    const wrongAnswers = rows.map(function(row) {
+      // Parse options from columns
+      const optionA = row[5] || '';
+      const optionB = row[6] || '';
+      const optionC = row[7] || '';
+      const optionD = row[8] || '';
+      
+      const options = {};
+      const optionLabels = [];
+      
+      if (optionA) { options['A'] = optionA; optionLabels.push('A'); }
+      if (optionB) { options['B'] = optionB; optionLabels.push('B'); }
+      if (optionC) { options['C'] = optionC; optionLabels.push('C'); }
+      if (optionD) { options['D'] = optionD; optionLabels.push('D'); }
+      
+      return {
+        timestamp: row[0],
+        userId: row[1],
+        topicId: row[2],
+        topicName: row[3],
+        question: row[4],
+        options: options,
+        optionLabels: optionLabels,
+        userAnswer: row[9],
+        correctAnswer: row[10],
+        explanation: row[11] || ''
+      };
+    });
+    
+    // Filter by topic if specified
+    let filteredAnswers = wrongAnswers;
+    if (params.topicId) {
+      filteredAnswers = wrongAnswers.filter(function(answer) {
+        return answer.topicId === params.topicId;
+      });
+    }
+    if (params.topicName) {
+      filteredAnswers = filteredAnswers.filter(function(answer) {
+        return answer.topicName === params.topicName;
+      });
+    }
+    
+    return {
+      success: true,
+      message: 'Success',
+      data: filteredAnswers
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: 'Error: ' + error.message,
+      data: []
+    };
+  }
 }
 
 // Tạo response

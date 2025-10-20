@@ -1,28 +1,90 @@
-// Admin credentials
-const ADMIN_CREDENTIALS = {
-  username: 'admin',
-  password: 'admin123'
-};
-
-function checkAuth() {
-  return localStorage.getItem('admin_authenticated') === 'true';
+// Admin credentials - now using IndexedDB via quizStorage
+async function getAdminCredentials() {
+  // Wait for quizStorage to be ready
+  let retries = 50;
+  while (!window.quizStorage && retries > 0) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    retries--;
+  }
+  
+  if (!window.quizStorage) {
+    return { username: 'admin', password: 'admin123' }; // Default fallback
+  }
+  
+  return await window.quizStorage.getAdminCredentials();
 }
 
-function handleLogin(e) {
+async function setAdminCredentials(username, password) {
+  // Wait for quizStorage to be ready
+  let retries = 50;
+  while (!window.quizStorage && retries > 0) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    retries--;
+  }
+  
+  if (!window.quizStorage) {
+    return false;
+  }
+  
+  return await window.quizStorage.setAdminCredentials(username, password);
+}
+
+let ADMIN_CREDENTIALS = null;
+
+async function checkAuth() {
+  // window.db and window.quizStorage should already be ready by DOMContentLoaded
+  if (!window.quizStorage) {
+    console.error('❌ checkAuth called but window.quizStorage not available');
+    return false;
+  }
+  
+  try {
+    return await window.quizStorage.isAdminAuthenticated();
+  } catch (error) {
+    console.error('❌ Error checking auth:', error);
+    return false;
+  }
+}
+
+async function handleLogin(e) {
   e.preventDefault();
   const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
   
-  if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
-    localStorage.setItem('admin_authenticated', 'true');
+  // Wait for quizStorage to be ready
+  let retries = 50;
+  while (!window.quizStorage && retries > 0) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    retries--;
+  }
+  
+  if (!window.quizStorage) {
+    alert('❌ Lỗi: IndexedDB chưa sẵn sàng. Vui lòng refresh trang!');
+    return;
+  }
+  
+  // Get current credentials from IndexedDB
+  const currentCreds = await getAdminCredentials();
+  
+  if (username === currentCreds.username && password === currentCreds.password) {
+    await window.quizStorage.setAdminAuthenticated(true);
     showAdminPanel();
   } else {
     alert('Tên đăng nhập hoặc mật khẩu không đúng!');
   }
 }
 
-function handleLogout() {
-  localStorage.removeItem('admin_authenticated');
+async function handleLogout() {
+  // Wait for quizStorage to be ready
+  let retries = 50;
+  while (!window.quizStorage && retries > 0) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    retries--;
+  }
+  
+  if (window.quizStorage) {
+    await window.quizStorage.setAdminAuthenticated(false);
+  }
   showLoginForm();
 }
 
@@ -38,12 +100,76 @@ function showLoginForm() {
   document.getElementById('login-form').reset();
 }
 
-function getTopics() {
-  return JSON.parse(localStorage.getItem('quiz_topics') || '[]');
+async function getTopics() {
+  try {
+    if (!window.quizStorage) {
+      console.error('❌ window.quizStorage not available');
+      return [];
+    }
+    
+    console.log('🔍 Getting topics from quizStorage...');
+    const topicsJson = await window.quizStorage.getTopics();
+    console.log('📊 Topics JSON:', topicsJson ? 'Found data' : 'No data');
+    
+    const topics = JSON.parse(topicsJson || '[]');
+    console.log('✅ Parsed topics:', topics.length, 'items');
+    return topics;
+  } catch (error) {
+    console.error('❌ Error getting topics:', error);
+    return [];
+  }
 }
 
-function saveTopics(topics) {
-  localStorage.setItem('quiz_topics', JSON.stringify(topics));
+async function saveTopics(topics) {
+  await window.quizStorage.saveTopics(topics);
+}
+
+async function checkAndInitializeData() {
+  console.log('🔍 Checking and initializing data...');
+  
+  try {
+    // Check if we have any topics in IndexedDB
+    const topics = await getTopics();
+    console.log('📊 Current topics in IndexedDB:', topics.length);
+    
+    if (topics.length === 0) {
+      console.log('⚠️ No topics found, trying to load from topics.json...');
+      
+      // Try to load from topics.json file
+      try {
+        const response = await fetch('./topics.json');
+        if (response.ok) {
+          const topicsData = await response.json();
+          console.log('✅ Loaded topics from topics.json:', topicsData.length);
+          
+          if (topicsData.length > 0) {
+            // Save to IndexedDB
+            await saveTopics(topicsData);
+            console.log('✅ Saved topics to IndexedDB');
+            
+            // Show success message
+            const msgEl = document.getElementById('topic-msg');
+            if (msgEl) {
+              msgEl.textContent = `Đã tải ${topicsData.length} chuyên đề từ topics.json`;
+              msgEl.className = 'ml-2 success';
+              setTimeout(() => {
+                msgEl.textContent = '';
+                msgEl.className = '';
+              }, 3000);
+            }
+          }
+        } else {
+          console.error('❌ Failed to fetch topics.json:', response.status);
+        }
+      } catch (error) {
+        console.error('❌ Error loading topics.json:', error);
+      }
+    } else {
+      console.log('✅ Topics already exist in IndexedDB');
+    }
+  } catch (error) {
+    console.error('❌ Error checking/initializing data:', error);
+  }
 }
 
 function uuid() {
@@ -96,10 +222,6 @@ function parseExcelFile(file, callback) {
       
       const questions = rows.map((row, idx) => {
         let rawAnswer = getCol(row, 'đáp án đúng').toString().trim();
-        let answer = ["1", "2", "3", "4"].includes(rawAnswer) 
-          ? ["A", "B", "C", "D"][parseInt(rawAnswer)-1] 
-          : rawAnswer.toUpperCase();
-        
         let cols = [
           {label: "A", value: getCol(row, 'đáp án a')},
           {label: "B", value: getCol(row, 'đáp án b')},
@@ -117,14 +239,41 @@ function parseExcelFile(file, callback) {
         });
         
         if (!getCol(row, 'câu hỏi')) return null;
-        if (!answer) return null;
-        
-        let validAnswer = false;
-        if (["A", "B", "C", "D"].includes(answer)) {
-          let idxLabel = ["A", "B", "C", "D"].indexOf(answer);
-          validAnswer = cols[idxLabel].value && cols[idxLabel].value.toString().trim() !== "";
-        }
-        if (!validAnswer) return null;
+        if (!rawAnswer) return null;
+
+        // Parse answer(s): support tokens like A, 1, A/1 and multiple separated by commas (e.g., A/1,c/3)
+        const labelsArray = (optionLabels || []).slice(); // e.g., ["A","B","C","D"] but only for non-empty options
+        const toLabel = (token) => {
+          if (!token) return null;
+          const t = String(token).trim();
+          if (!t) return null;
+          const parts = t.split('/').map(p => p.trim()).filter(Boolean);
+          let letter = null;
+          let number = null;
+          parts.forEach(p => {
+            if (/^[A-Za-z]$/.test(p)) letter = p.toUpperCase();
+            else if (/^\d+$/.test(p)) number = parseInt(p, 10);
+          });
+          if (letter && labelsArray.includes(letter)) return letter;
+          if (Number.isFinite(number) && number >= 1 && number <= labelsArray.length) return labelsArray[number - 1];
+          // If token is just letter or number without '/'
+          const upper = t.toUpperCase();
+          if (/^[A-D]$/.test(upper) && labelsArray.includes(upper)) return upper;
+          const asNum = parseInt(t, 10);
+          if (!Number.isNaN(asNum) && asNum >= 1 && asNum <= labelsArray.length) return labelsArray[asNum - 1];
+          return null;
+        };
+
+        const tokens = rawAnswer.split(',').map(s => s.trim()).filter(Boolean);
+        const mapped = Array.from(new Set(tokens.map(toLabel).filter(Boolean)));
+        if (mapped.length === 0) return null; // no valid answers parsed
+
+        // Validate: every mapped label must correspond to an available option label
+        const allValid = mapped.every(lbl => labelsArray.includes(lbl));
+        if (!allValid) return null;
+
+        // Convert to single string if only one answer, else array
+        const answer = mapped.length === 1 ? mapped[0] : mapped;
         
         return {
           question: getCol(row, 'câu hỏi'),
@@ -150,13 +299,17 @@ function parseExcelFile(file, callback) {
   reader.readAsBinaryString(file);
 }
 
-function renderTopics() {
-  const topics = getTopics();
+async function renderTopics() {
+  console.log('🎨 Starting renderTopics...');
+  const topics = await getTopics();
+  console.log('📋 Topics to render:', topics.length);
+  
   const selector = document.getElementById('topic-selector');
   const detailContainer = document.getElementById('topic-detail-container');
   const gridContainer = document.getElementById('topic-list-container');
   
   if (topics.length === 0) {
+    console.log('⚠️ No topics found, showing empty state');
     selector.innerHTML = '<option value="">-- Chưa có chuyên đề --</option>';
     detailContainer.style.display = 'none';
     if (gridContainer) gridContainer.innerHTML = '<div class="empty-state"><i class="material-icons">folder_open</i><p>Chưa có chuyên đề nào</p></div>';
@@ -168,17 +321,60 @@ function renderTopics() {
   
   const normalTopics = topics.filter(t => !t.isExam);
   const exams = topics.filter(t => t.isExam === true);
+  
+  // Sort topics by name (extract number prefix for proper ordering)
+  const sortTopics = (topics) => {
+    return topics.sort((a, b) => {
+      // Extract number prefix (e.g., "1. Tín dụng..." -> 1)
+      const getNumber = (name) => {
+        const match = name.match(/^(\d+)\./);
+        return match ? parseInt(match[1]) : 999;
+      };
+      
+      const numA = getNumber(a.name);
+      const numB = getNumber(b.name);
+      
+      // If both have numbers, sort by number
+      if (numA !== 999 && numB !== 999) {
+        return numA - numB;
+      }
+      
+      // If only one has number, number comes first
+      if (numA !== 999) return -1;
+      if (numB !== 999) return 1;
+      
+      // If neither has number, sort alphabetically
+      return a.name.localeCompare(b.name, 'vi');
+    });
+  };
+  
+  // Sort both topics and exams
+  const sortedNormalTopics = sortTopics(normalTopics);
+  const sortedExams = sortTopics(exams);
+  
+  // Filter out review topics (created from wrong answers) for exam builder
+  const examBuilderTopics = sortedNormalTopics.filter(topic => 
+    !topic.name.includes('Ôn tập câu sai') && 
+    !topic.createdFrom
+  );
+
+  // Filter out review topics and exam-like topics for topic selector (edit topic dropdown)
+  const topicSelectorTopics = sortedNormalTopics.filter(topic => 
+    !topic.name.includes('Ôn tập câu sai') && 
+    !topic.createdFrom &&
+    !topic.name.includes('(Bài thi')
+  );
 
   // Populate topic selector dropdown
   selector.innerHTML = '<option value="">-- Chọn chuyên đề --</option>' + 
-    normalTopics.map(topic => `<option value="${topic.id}">${topic.name} (${topic.questions.length} câu)</option>`).join('');
+    topicSelectorTopics.map(topic => `<option value="${topic.id}">${topic.name} (${topic.questions.length} câu)</option>`).join('');
   
   // Clear detail on re-render
   detailContainer.style.display = 'none';
   
   // Populate grid view
   if (gridContainer) {
-    gridContainer.innerHTML = normalTopics.map(topic => `
+    gridContainer.innerHTML = topicSelectorTopics.map(topic => `
       <div class="topic-item">
         <div class="topic-info">
           <h3>${topic.name}</h3>
@@ -196,8 +392,8 @@ function renderTopics() {
     `).join('');
   }
 
-  renderExamBuilderTopics(normalTopics);
-  renderExams(exams);
+  renderExamBuilderTopics(examBuilderTopics);
+  renderExams(sortedExams);
 }
 
 function updateExamView(exam) {
@@ -292,8 +488,8 @@ function renderExams(exams) {
 }
 
 // ===== Edit Topic Logic =====
-window.openEditTopic = function(topicId) {
-  const topics = getTopics();
+window.openEditTopic = async function(topicId) {
+  const topics = await getTopics();
   const topic = topics.find(t => t.id === topicId && !t.isExam);
   if (!topic) return;
   
@@ -304,7 +500,7 @@ window.openEditTopic = function(topicId) {
   document.getElementById('edit-topic-modal').classList.remove('hidden');
 }
 
-function saveEditTopic(e) {
+async function saveEditTopic(e) {
   e.preventDefault();
   const msg = document.getElementById('edit-topic-msg');
   msg.textContent = '';
@@ -318,7 +514,7 @@ function saveEditTopic(e) {
     return;
   }
   
-  const topics = getTopics();
+  const topics = await getTopics();
   const idx = topics.findIndex(t => t.id === id && !t.isExam);
   if (idx === -1) {
     msg.textContent = 'Không tìm thấy chuyên đề!';
@@ -329,29 +525,29 @@ function saveEditTopic(e) {
   if (!file) {
     // Chỉ đổi tên
     topics[idx].name = name;
-    saveTopics(topics);
-    renderTopics();
+    await saveTopics(topics);
+    await renderTopics();
     document.getElementById('edit-topic-modal').classList.add('hidden');
     return;
   }
   
   // Đổi tên + thay câu hỏi
-  parseExcelFile(file, (result) => {
+  parseExcelFile(file, async (result) => {
     if (result.error) {
       msg.textContent = result.error;
       return;
     }
     topics[idx].name = name;
     topics[idx].questions = result.questions;
-    saveTopics(topics);
-    renderTopics();
+    await saveTopics(topics);
+    await renderTopics();
     document.getElementById('edit-topic-modal').classList.add('hidden');
   });
 }
 
 // ===== Edit Exam Logic =====
-window.openEditExam = function(examId) {
-  const topics = getTopics();
+window.openEditExam = async function(examId) {
+  const topics = await getTopics();
   const exam = topics.find(t => t.id === examId && t.isExam);
   if (!exam) return;
   
@@ -368,7 +564,40 @@ window.openEditExam = function(examId) {
 function renderEditExamTopics(allTopics, exam) {
   const holder = document.getElementById('edit-exam-topic-percents');
   if (!holder) return;
-  if (!allTopics || allTopics.length === 0) {
+  
+  // Sort topics by name (extract number prefix for proper ordering)
+  const sortTopics = (topics) => {
+    return topics.sort((a, b) => {
+      // Extract number prefix (e.g., "1. Tín dụng..." -> 1)
+      const getNumber = (name) => {
+        const match = name.match(/^(\d+)\./);
+        return match ? parseInt(match[1]) : 999;
+      };
+      
+      const numA = getNumber(a.name);
+      const numB = getNumber(b.name);
+      
+      // If both have numbers, sort by number
+      if (numA !== 999 && numB !== 999) {
+        return numA - numB;
+      }
+      
+      // If only one has number, number comes first
+      if (numA !== 999) return -1;
+      if (numB !== 999) return 1;
+      
+      // If neither has number, sort alphabetically
+      return a.name.localeCompare(b.name, 'vi');
+    });
+  };
+  
+  // Filter out review topics (created from wrong answers) and sort
+  const filteredTopics = sortTopics(allTopics.filter(topic => 
+    !topic.name.includes('Ôn tập câu sai') && 
+    !topic.createdFrom
+  ));
+  
+  if (!filteredTopics || filteredTopics.length === 0) {
     holder.innerHTML = '<div style="text-align: center; padding: 20px; color: #6c757d;"><i class="material-icons" style="font-size: 2rem; margin-bottom: 8px; display: block;">folder_open</i>Chưa có chuyên đề để chọn.</div>';
     return;
   }
@@ -376,7 +605,7 @@ function renderEditExamTopics(allTopics, exam) {
   const distMap = {};
   (exam.examConfig?.distribution || []).forEach(d => distMap[d.id] = d.percent);
   
-  holder.innerHTML = allTopics.map(t => `
+  holder.innerHTML = filteredTopics.map(t => `
     <div class="topic-item">
       <label>
         <input type="checkbox" class="edit-eb-topic-check" value="${t.id}" ${distMap[t.id] ? 'checked' : ''}>
@@ -479,7 +708,7 @@ function updateEditExamPercentSummary() {
   holder.appendChild(summary);
 }
 
-function saveEditExam(e) {
+async function saveEditExam(e) {
   e.preventDefault();
   const msg = document.getElementById('edit-exam-msg');
   msg.textContent = '';
@@ -512,7 +741,7 @@ function saveEditExam(e) {
   }
   if (Math.round(sumPercent) !== 100) { msg.textContent = 'Tổng tỷ lệ phải bằng 100%'; return; }
 
-  const topics = getTopics();
+  const topics = await getTopics();
   const idx = topics.findIndex(t => t.id === id && t.isExam);
   if (idx === -1) { msg.textContent = 'Không tìm thấy bài thi!'; return; }
   
@@ -520,21 +749,21 @@ function saveEditExam(e) {
   topics[idx].durationMinutes = durationMinutes;
   topics[idx].allowPause = allowPause;
   topics[idx].examConfig = { total, distribution: dist };
-  saveTopics(topics);
+  await saveTopics(topics);
   
-  try { localStorage.removeItem(`quiz_exam_questions_${id}`); } catch(_) {}
-  renderTopics();
+  await window.quizStorage.deleteExamQuestions(id);
+  await renderTopics();
   document.getElementById('edit-exam-modal').classList.add('hidden');
 }
 
-window.delTopic = function(id) {
+window.delTopic = async function(id) {
   if (!confirm('Bạn có chắc chắn muốn xóa chuyên đề này?')) return;
-  const all = getTopics();
+  const all = await getTopics();
   const removed = all.find(topic => topic.id === id);
   const topics = all.filter(topic => topic.id !== id);
-  saveTopics(topics);
+  await saveTopics(topics);
   if (removed && removed.isExam === true) {
-    try { localStorage.removeItem(`quiz_exam_questions_${id}`); } catch(_) {}
+    await window.quizStorage.deleteExamQuestions(id);
   }
   
   // Reset selectors after deletion
@@ -543,7 +772,7 @@ window.delTopic = function(id) {
   document.getElementById('topic-detail-container').style.display = 'none';
   document.getElementById('exam-detail-container').style.display = 'none';
   
-  renderTopics();
+  await renderTopics();
 };
 
 function shuffleArray(arr) {
@@ -966,7 +1195,7 @@ function normalizePercents(scopeEl, viewType = 'dropdown') {
   if (lastInp) lastInp.value = String(remain);
 }
 
-function buildCompositeExam(e) {
+async function buildCompositeExam(e) {
   e.preventDefault();
   const msg = document.getElementById('exam-builder-msg');
   msg.textContent = '';
@@ -975,7 +1204,7 @@ function buildCompositeExam(e) {
   const total = parseInt(document.getElementById('exam-total').value, 10);
   const durationMinutes = parseInt(document.getElementById('exam-duration').value, 10);
   const allowPause = !!document.getElementById('exam-allow-pause').checked;
-  const allTopics = getTopics();
+  const allTopics = await getTopics();
 
   if (!name) { msg.textContent = 'Vui lòng nhập tên bộ đề!'; return; }
   if (!Number.isFinite(total) || total <= 0) { msg.textContent = 'Tổng số câu hỏi phải là số > 0!'; return; }
@@ -1114,15 +1343,15 @@ function buildCompositeExam(e) {
     durationMinutes: durationMinutes, 
     allowPause: allowPause 
   });
-  saveTopics(topics);
-  renderTopics();
+  await saveTopics(topics);
+  await renderTopics();
   document.getElementById('exam-builder-form').reset();
   msg.textContent = 'Tạo bộ đề thành công!';
   setTimeout(() => { msg.textContent = ''; }, 2000);
 }
 
-function exportTopicsJson() {
-  const topics = getTopics();
+async function exportTopicsJson() {
+  const topics = await getTopics();
   const blob = new Blob([JSON.stringify(topics, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1394,18 +1623,42 @@ function renderTopicDropdown(topics) {
   const selector = document.getElementById('topic-selector');
   selector.innerHTML = '<option value="">-- Chọn chuyên đề --</option>';
   
-  topics.forEach(topic => {
+  // Filter out review topics and exam-like topics and sort
+  const filteredTopics = topics.filter(topic => 
+    !topic.name.includes('Ôn tập câu sai') && 
+    !topic.createdFrom &&
+    !topic.name.includes('(Bài thi')
+  ).sort((a, b) => {
+    // Extract number prefix (e.g., "1. Tín dụng..." -> 1)
+    const getNumber = (name) => {
+      const match = name.match(/^(\d+)\./);
+      return match ? parseInt(match[1]) : 999;
+    };
+    
+    const numA = getNumber(a.name);
+    const numB = getNumber(b.name);
+    
+    // If both have numbers, sort by number
+    if (numA !== 999 && numB !== 999) {
+      return numA - numB;
+    }
+    
+    // If only one has number, number comes first
+    if (numA !== 999) return -1;
+    if (numB !== 999) return 1;
+    
+    // If neither has number, sort alphabetically
+    return a.name.localeCompare(b.name, 'vi');
+  });
+  
+  filteredTopics.forEach(topic => {
     const option = document.createElement('option');
     option.value = topic.id;
     option.textContent = topic.name;
     selector.appendChild(option);
   });
   
-  selector.onchange = (e) => {
-    const topicId = e.target.value;
-    const topic = topics.find(t => t.id === topicId);
-    updateTopicView(topic);
-  };
+  // Event listener will be set in initializeViews
 }
 
 function renderTopicGrid(topics) {
@@ -1442,15 +1695,56 @@ function renderTopicGrid(topics) {
 }
 
 // Initialize
-document.addEventListener('DOMContentLoaded', function() {
-  if (checkAuth()) {
+document.addEventListener('DOMContentLoaded', async function() {
+  // Wait for window.db to exist (should be immediate since script loads before this)
+  let retries = 50;
+  while (!window.db && retries > 0) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    retries--;
+  }
+  
+  if (!window.db) {
+    console.error('❌ window.db not available after timeout');
+    alert('Lỗi khởi tạo hệ thống. Vui lòng F5 để tải lại trang.');
+    return;
+  }
+  
+  // Wait for IndexedDB to be fully initialized (window.db.ready is a Promise)
+  try {
+    await window.db.ready;
+    console.log('✅ IndexedDB is ready for admin panel');
+  } catch (e) {
+    console.error('❌ Error waiting for IndexedDB ready:', e);
+    alert('Lỗi khởi tạo database. Vui lòng thử lại hoặc xóa dữ liệu trình duyệt.');
+    return;
+  }
+  
+  // Wait for quizStorage to exist
+  console.log('🔍 Waiting for quizStorage...');
+  retries = 50;
+  while (!window.quizStorage && retries > 0) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    retries--;
+  }
+  
+  if (!window.quizStorage) {
+    console.error('❌ window.quizStorage not available after timeout');
+    alert('Lỗi khởi tạo storage. Vui lòng F5 để tải lại trang.');
+    return;
+  }
+  
+  console.log('✅ quizStorage is ready');
+  
+  const isAuth = await checkAuth();
+  if (isAuth) {
     showAdminPanel();
     initializeViews();
     
-    // Initialize topic management
-    const topics = getTopics();
-    renderTopicDropdown(topics);
-    renderTopicGrid(topics);
+    // Check and initialize data if needed
+    await checkAndInitializeData();
+    
+    // Render topics after data initialization
+    await renderTopics();
     
     // Add new topic button
     const addTopicBtn = document.getElementById('add-topic-btn');
@@ -1464,7 +1758,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Save topic form
     const topicForm = document.getElementById('topic-form');
     if (topicForm) {
-      topicForm.onsubmit = (e) => {
+      topicForm.onsubmit = async (e) => {
         e.preventDefault();
         const topicName = document.getElementById('topic-name').value.trim();
         const fileInput = document.getElementById('file-quiz');
@@ -1482,14 +1776,14 @@ document.addEventListener('DOMContentLoaded', function() {
           return;
         }
         
-        parseExcelFile(fileInput.files[0], (result) => {
+        parseExcelFile(fileInput.files[0], async (result) => {
           if (result.error) {
             msgEl.textContent = result.error;
             msgEl.className = 'ml-2 error';
             return;
           }
           
-          const topics = getTopics();
+          const topics = await getTopics();
           const newTopic = {
             id: uuid(),
             name: topicName,
@@ -1498,7 +1792,7 @@ document.addEventListener('DOMContentLoaded', function() {
           };
           
           topics.push(newTopic);
-          saveTopics(topics);
+          await saveTopics(topics);
           
           // Reset form
           topicForm.reset();
@@ -1506,7 +1800,7 @@ document.addEventListener('DOMContentLoaded', function() {
           msgEl.className = 'ml-2 success';
           
           // Refresh views
-          renderTopics();
+          await renderTopics();
           
           setTimeout(() => {
             msgEl.textContent = '';
@@ -1539,7 +1833,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Topic selector change handler
   const topicSelector = document.getElementById('topic-selector');
-  if (topicSelector) topicSelector.addEventListener('change', function(e) {
+  if (topicSelector) topicSelector.addEventListener('change', async function(e) {
     const topicId = e.target.value;
     const detailContainer = document.getElementById('topic-detail-container');
     const detailDiv = document.getElementById('selected-topic-detail');
@@ -1549,7 +1843,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
-    const topics = getTopics();
+    const topics = await getTopics();
     const topic = topics.find(t => t.id === topicId && !t.isExam);
     
     if (topic) {
@@ -1573,7 +1867,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Exam selector change handler
   const examSelector = document.getElementById('exam-selector');
-  if (examSelector) examSelector.addEventListener('change', function(e) {
+  if (examSelector) examSelector.addEventListener('change', async function(e) {
     const examId = e.target.value;
     const detailContainer = document.getElementById('exam-detail-container');
     const detailDiv = document.getElementById('selected-exam-detail');
@@ -1583,7 +1877,7 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
-    const topics = getTopics();
+    const topics = await getTopics();
     const exam = topics.find(t => t.id === examId && t.isExam);
     
     if (exam) {
@@ -1609,9 +1903,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
   
-  // Topic form
+  // Topic form (duplicate handler - already handled above, skip)
   const topicFormSubmit = document.getElementById('topic-form');
-  if (topicFormSubmit) topicFormSubmit.addEventListener('submit', function(e) {
+  if (false) { // Disabled - already handled above
+    topicFormSubmit.addEventListener('submit', async function(e) {
     e.preventDefault();
     const name = document.getElementById('topic-name').value.trim();
     const fileInput = document.getElementById('file-quiz');
@@ -1622,25 +1917,26 @@ document.addEventListener('DOMContentLoaded', function() {
     const file = fileInput.files[0];
     if (!file) { msg.textContent = "Vui lòng chọn file câu hỏi!"; return; }
     
-    parseExcelFile(file, (result) => {
+      parseExcelFile(file, async (result) => {
       if (result.error) {
         msg.textContent = result.error;
         return;
       }
       
-      const topics = getTopics();
+        const topics = await getTopics();
       topics.push({
         id: uuid(),
         name: name,
         questions: result.questions
       });
-      saveTopics(topics);
-      renderTopics();
+        await saveTopics(topics);
+        await renderTopics();
       document.getElementById('topic-form').reset();
       msg.textContent = "Tạo chuyên đề thành công!";
       setTimeout(() => { msg.textContent = ''; }, 2000);
     });
   });
+  }
   
   // Edit Topic modal handlers
   const editTopicForm = document.getElementById('edit-topic-form');
@@ -1659,6 +1955,24 @@ document.addEventListener('DOMContentLoaded', function() {
   if (editExamCancel) editExamCancel.addEventListener('click', () => {
     document.getElementById('edit-exam-modal').classList.add('hidden');
   });
+  
+  // Change password handlers
+  const changePasswordBtn = document.getElementById('change-password-btn');
+  if (changePasswordBtn) changePasswordBtn.addEventListener('click', showChangePasswordModal);
+  
+  const changePasswordForm = document.getElementById('change-password-form');
+  if (changePasswordForm) changePasswordForm.addEventListener('submit', handleChangePassword);
+  
+  const changePasswordCancel = document.getElementById('change-password-cancel');
+  if (changePasswordCancel) changePasswordCancel.addEventListener('click', () => {
+    document.getElementById('change-password-modal').classList.add('hidden');
+    document.getElementById('change-password-form').reset();
+    document.getElementById('change-password-msg').textContent = '';
+  });
+  
+  // Forgot password handler
+  const forgotPasswordLink = document.getElementById('forgot-password-link');
+  if (forgotPasswordLink) forgotPasswordLink.addEventListener('click', handleForgotPassword);
   
   // Exam Builder
   const examBuilderForm = document.getElementById('exam-builder-form');
@@ -1679,7 +1993,397 @@ document.addEventListener('DOMContentLoaded', function() {
   if (testGoogleSheetsBtn) testGoogleSheetsBtn.addEventListener('click', async function() {
     await testGoogleSheetsConnection();
   });
+  
+  // Load topics button
+  const loadTopicsBtn = document.getElementById('load-topics-btn');
+  if (loadTopicsBtn) loadTopicsBtn.addEventListener('click', async function() {
+    await checkAndInitializeData();
+    await renderTopics();
+  });
+  
+  // Merge JSON files
+  const mergeJsonBtn = document.getElementById('merge-json-btn');
+  if (mergeJsonBtn) mergeJsonBtn.addEventListener('click', initMergeJson);
+  
+  const mergeJsonFile1Input = document.getElementById('merge-json-file-1');
+  if (mergeJsonFile1Input) mergeJsonFile1Input.addEventListener('change', handleMergeFile1);
+  
+  const mergeJsonFile2Input = document.getElementById('merge-json-file-2');
+  if (mergeJsonFile2Input) mergeJsonFile2Input.addEventListener('change', handleMergeFile2);
 });
+
+// Forgot password functionality
+async function handleForgotPassword(e) {
+  e.preventDefault();
+  
+  const confirmed = confirm(
+    '⚠️ CẢNH BÁO: Reset mật khẩu về mặc định!\n\n' +
+    'Mật khẩu sẽ được reset về:\n' +
+    '• Username: admin\n' +
+    '• Password: admin123\n\n' +
+    'Bạn có chắc chắn muốn tiếp tục?'
+  );
+  
+  if (!confirmed) return;
+  
+  try {
+    // Reset to default credentials
+    await setAdminCredentials('admin', 'admin123');
+    
+    alert(
+      '✅ Reset mật khẩu thành công!\n\n' +
+      'Thông tin đăng nhập mặc định:\n' +
+      '• Username: admin\n' +
+      '• Password: admin123\n\n' +
+      'Vui lòng đăng nhập lại và ĐỔI MẬT KHẨU ngay!'
+    );
+    
+    // Clear authentication
+    await window.quizStorage.safeRemove('admin_authenticated');
+    
+    // Reload page
+    location.reload();
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    alert('❌ Lỗi khi reset mật khẩu: ' + error.message);
+  }
+}
+
+// Change password functionality
+async function showChangePasswordModal() {
+  document.getElementById('change-password-modal').classList.remove('hidden');
+  document.getElementById('change-password-form').reset();
+  document.getElementById('change-password-msg').textContent = '';
+  
+  // Pre-fill current username
+  const currentCreds = await getAdminCredentials();
+  document.getElementById('change-new-username').placeholder = `Hiện tại: ${currentCreds.username}`;
+}
+
+async function handleChangePassword(e) {
+  e.preventDefault();
+  
+  const currentPassword = document.getElementById('change-current-password').value;
+  const newUsername = document.getElementById('change-new-username').value.trim();
+  const newPassword = document.getElementById('change-new-password').value;
+  const confirmPassword = document.getElementById('change-confirm-password').value;
+  
+  const msgEl = document.getElementById('change-password-msg');
+  msgEl.textContent = 'Đang xử lý...';
+  msgEl.style.color = '#666';
+  
+  // Get current credentials
+  const currentCreds = await getAdminCredentials();
+  
+  // Verify current password
+  if (currentPassword !== currentCreds.password) {
+    msgEl.textContent = 'Mật khẩu hiện tại không đúng!';
+    msgEl.style.color = '#dc3545';
+    return;
+  }
+  
+  // Validate new password
+  if (newPassword.length < 6) {
+    msgEl.textContent = 'Mật khẩu mới phải có ít nhất 6 ký tự!';
+    msgEl.style.color = '#dc3545';
+    return;
+  }
+  
+  // Check if passwords match
+  if (newPassword !== confirmPassword) {
+    msgEl.textContent = 'Mật khẩu xác nhận không khớp!';
+    msgEl.style.color = '#dc3545';
+    return;
+  }
+  
+  // Update credentials
+  const updatedUsername = newUsername || currentCreds.username;
+  await setAdminCredentials(updatedUsername, newPassword);
+  
+  // Show success message
+  msgEl.textContent = 'Đã đổi mật khẩu thành công!';
+  msgEl.style.color = '#28a745';
+  
+  // Close modal and logout after 1.5 seconds
+  setTimeout(async () => {
+    document.getElementById('change-password-modal').classList.add('hidden');
+    alert('Mật khẩu đã được thay đổi!\n\nBạn sẽ được đăng xuất. Vui lòng đăng nhập lại với mật khẩu mới.');
+    await handleLogout();
+  }, 1500);
+}
+
+// Merge JSON files functionality
+let mergeFile1Data = null;
+let mergeFile2Data = null;
+
+function initMergeJson() {
+  mergeFile1Data = null;
+  mergeFile2Data = null;
+  
+  // Trigger file 1 selection immediately (no alert to avoid blocking)
+  const fileInput1 = document.getElementById('merge-json-file-1');
+  if (fileInput1) {
+    fileInput1.click();
+  }
+}
+
+function handleMergeFile1(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    try {
+      mergeFile1Data = JSON.parse(event.target.result);
+      
+      console.log('✅ File 1 loaded:', file.name);
+      
+      // Trigger file 2 selection after a short delay
+      setTimeout(() => {
+        const fileInput2 = document.getElementById('merge-json-file-2');
+        if (fileInput2) {
+          console.log('📁 Opening file chooser 2...');
+          fileInput2.click();
+        }
+      }, 300);
+    } catch (error) {
+      alert('❌ Lỗi đọc file 1: ' + error.message);
+      mergeFile1Data = null;
+    }
+  };
+  reader.readAsText(file);
+  
+  // Reset input
+  e.target.value = '';
+}
+
+function handleMergeFile2(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  if (!mergeFile1Data) {
+    alert('❌ Vui lòng chọn file 1 trước!');
+    return;
+  }
+  
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    try {
+      mergeFile2Data = JSON.parse(event.target.result);
+      console.log('✅ File 2 loaded:', file.name);
+      console.log('⚙️ Starting merge process...');
+      
+      // Start merge process
+      performMerge();
+    } catch (error) {
+      alert('❌ Lỗi đọc file 2: ' + error.message);
+      mergeFile2Data = null;
+    }
+  };
+  reader.readAsText(file);
+  
+  // Reset input
+  e.target.value = '';
+}
+
+function performMerge() {
+  if (!mergeFile1Data || !mergeFile2Data) {
+    alert('Chưa đủ dữ liệu để gộp!');
+    return;
+  }
+  
+  try {
+    // Ensure both files are arrays
+    const data1 = Array.isArray(mergeFile1Data) ? mergeFile1Data : [];
+    const data2 = Array.isArray(mergeFile2Data) ? mergeFile2Data : [];
+    
+    // Separate topics and exams from both files
+    const topics1 = data1.filter(item => !item.isExam && !item.examConfig);
+    const exams1 = data1.filter(item => item.isExam || item.examConfig);
+    
+    const topics2 = data2.filter(item => !item.isExam && !item.examConfig);
+    const exams2 = data2.filter(item => item.isExam || item.examConfig);
+    
+    // Merge and remove duplicates for topics
+    const mergedTopics = mergeDeduplicate(topics1, topics2, 'topics');
+    
+    // Merge and remove duplicates for exams
+    const mergedExams = mergeDeduplicate(exams1, exams2, 'exams');
+    
+    // Create summary
+    const topicsRemoved = topics1.length + topics2.length - mergedTopics.length;
+    const examsRemoved = exams1.length + exams2.length - mergedExams.length;
+    
+    const summary = `✅ GỘP THÀNH CÔNG!
+
+📚 CHUYÊN ĐỀ:
+• File 1: ${topics1.length}
+• File 2: ${topics2.length}
+• Tổng: ${topics1.length + topics2.length}
+• Loại bỏ trùng: ${topicsRemoved}
+• ✅ Kết quả: ${mergedTopics.length}
+
+📝 BÀI THI:
+• File 1: ${exams1.length}
+• File 2: ${exams2.length}
+• Tổng: ${exams1.length + exams2.length}
+• Loại bỏ trùng: ${examsRemoved}
+• ✅ Kết quả: ${mergedExams.length}
+
+💡 Lưu ý: Nếu có ID trùng nhưng nội dung khác,
+hệ thống đã tự động tạo ID mới (xem Console).
+
+🎉 Đang tải xuống merged_all.json...`;
+    
+    console.log(summary);
+    
+    // Create a combined file with both topics and exams
+    const combined = [...mergedTopics, ...mergedExams];
+    if (combined.length > 0) {
+      downloadJson(combined, 'merged_all.json');
+      alert(`✅ Đã tạo file: merged_all.json\n\n📦 Tổng cộng: ${combined.length} items\n• ${mergedTopics.length} chuyên đề\n• ${mergedExams.length} bài thi\n\n💾 Thay thế topics.json gốc bằng file này để sử dụng!`);
+    } else {
+      alert('⚠️ Không có dữ liệu để gộp!');
+    }
+    
+    // Reset data
+    mergeFile1Data = null;
+    mergeFile2Data = null;
+    
+  } catch (error) {
+    alert('Lỗi khi gộp dữ liệu: ' + error.message);
+    console.error('Merge error:', error);
+  }
+}
+
+function mergeDeduplicate(array1, array2, type) {
+  // Combine arrays
+  const combined = [...array1, ...array2];
+  
+  // Create a map to track unique items
+  const uniqueMap = new Map();
+  
+  // Track true duplicates vs ID conflicts
+  const trueDuplicates = [];
+  const idConflicts = [];
+  
+  combined.forEach(item => {
+    // Generate a unique key based on ID or name
+    let key = item.id;
+    
+    // If no ID, use name as key
+    if (!key && item.name) {
+      key = item.name.toLowerCase().trim();
+    }
+    
+    // If we haven't seen this key before, add it
+    if (!uniqueMap.has(key)) {
+      uniqueMap.set(key, item);
+    } else {
+      // Key already exists - check if content is actually different
+      const existing = uniqueMap.get(key);
+      
+      // Compare content to determine if it's a true duplicate or just ID conflict
+      const isDifferent = isContentDifferent(existing, item);
+      
+      if (isDifferent) {
+        // ID conflict: same ID but different content
+        // Create a new unique ID for this item
+        let newKey = key;
+        let suffix = 2;
+        while (uniqueMap.has(newKey)) {
+          newKey = `${key}_${suffix}`;
+          suffix++;
+        }
+        
+        // Update item's ID to avoid conflict
+        const newItem = { ...item, id: newKey };
+        uniqueMap.set(newKey, newItem);
+        
+        idConflicts.push({
+          originalId: key,
+          newId: newKey,
+          name: item.name
+        });
+      } else {
+        // True duplicate: same ID and same content
+        trueDuplicates.push({
+          key: key,
+          name: item.name,
+          type: type
+        });
+        
+        // Keep the item with more questions or more properties
+        if (item.questions && existing.questions) {
+          if (item.questions.length > existing.questions.length) {
+            uniqueMap.set(key, item);
+          } else if (item.questions.length === existing.questions.length) {
+            const existingProps = Object.keys(existing).length;
+            const newProps = Object.keys(item).length;
+            if (newProps > existingProps) {
+              uniqueMap.set(key, item);
+            }
+          }
+        }
+      }
+    }
+  });
+  
+  // Log results
+  if (trueDuplicates.length > 0) {
+    console.log(`✅ Loại bỏ ${trueDuplicates.length} ${type} trùng lặp thực sự:`, trueDuplicates);
+  }
+  if (idConflicts.length > 0) {
+    console.log(`⚠️ Phát hiện ${idConflicts.length} ${type} có ID trùng nhưng nội dung khác (đã tạo ID mới):`, idConflicts);
+  }
+  
+  // Return unique items as array
+  return Array.from(uniqueMap.values());
+}
+
+// Helper function to compare if two items have different content
+function isContentDifferent(item1, item2) {
+  // Compare name
+  if (item1.name !== item2.name) return true;
+  
+  // Compare number of questions
+  if (item1.questions && item2.questions) {
+    if (item1.questions.length !== item2.questions.length) return true;
+  }
+  
+  // For exams, compare examConfig
+  if (item1.examConfig && item2.examConfig) {
+    const config1 = JSON.stringify(item1.examConfig);
+    const config2 = JSON.stringify(item2.examConfig);
+    if (config1 !== config2) return true;
+  }
+  
+  // Compare questions content (first 3 questions as sample)
+  if (item1.questions && item2.questions && item1.questions.length > 0) {
+    const sampleSize = Math.min(3, item1.questions.length);
+    for (let i = 0; i < sampleSize; i++) {
+      if (item1.questions[i]?.question !== item2.questions[i]?.question) {
+        return true;
+      }
+    }
+  }
+  
+  // If all checks pass, items are considered the same
+  return false;
+}
+
+function downloadJson(data, filename) {
+  const jsonStr = JSON.stringify(data, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 // Test Google Sheets connection function
 async function testGoogleSheetsConnection() {

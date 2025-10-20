@@ -13,6 +13,9 @@
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <!-- Config file -->
   <script src="config.js"></script>
+  <script src="indexeddb-storage.js"></script>
+  <script src="storage-wrapper.js"></script>
+  <script src="quiz-storage-helper.js"></script>
   <!-- Excel export library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -415,6 +418,7 @@
       width: 280px;
       right: -280px;
     }
+ 
     
     .sidebar-toggle-btn {
       right: 10px;
@@ -593,7 +597,7 @@
     <header>
       <div class="header-top">
       <div class="logo">
-        <img src="logo.png" alt="Logo" id="logo-img">
+        <img src="logo.png" alt="Logo" id="logo-img" onerror="console.error('Logo load failed:', this.src);">
         <div class="logo-text">
           <h1><b>HỆ THỐNG TRẮC NGHIỆM CHI NHÁNH CẦN THƠ II</b></h1>
           <p id="topic-name"></p>
@@ -725,6 +729,62 @@
     </div>
   </div>
   <script>
+    // 🔄 Auto-cleanup: Xóa localStorage cũ khi load trang (quiz progress đã chuyển sang IndexedDB)
+    (function() {
+      const keysToKeep = ['admin_credentials', 'admin_authenticated', 'deleted_review_topics', 'deleted_review_topics_map'];
+      const keysToRemove = [];
+      
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && !keysToKeep.includes(key)) {
+          keysToRemove.push(key);
+        }
+      }
+      
+      if (keysToRemove.length > 0) {
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+      }
+    })();
+    
+    // 🔄 AUTO-MIGRATION: Copy data từ localStorage sang IndexedDB
+    (async function autoMigrateToIndexedDB() {
+      try {
+        // Wait for IndexedDB to be ready
+        if (window.db && window.db.ready) {
+          await window.db.ready;
+          
+          // Check if we have data in localStorage that needs migration
+          const hasLocalStats = localStorage.getItem('quiz_statistics');
+          const hasLocalWrongAnswers = localStorage.getItem('wrong_answers');
+          
+          if (hasLocalStats || hasLocalWrongAnswers) {
+            console.log('📦 Found data in localStorage, starting migration to IndexedDB...');
+            
+            // Perform migration
+            const migrated = await window.db.migrateFromLocalStorage();
+            
+            if (migrated.statistics > 0 || migrated.wrongAnswers > 0) {
+              console.log('✅ Migration completed:', migrated);
+              
+              // Clear migrated data from localStorage to save space
+              if (migrated.statistics > 0) {
+                localStorage.removeItem('quiz_statistics');
+                console.log('🗑️ Removed quiz_statistics from localStorage');
+              }
+              if (migrated.wrongAnswers > 0) {
+                localStorage.removeItem('wrong_answers');
+                console.log('🗑️ Removed wrong_answers from localStorage');
+              }
+            }
+          } else {
+            console.log('✅ No data to migrate from localStorage');
+          }
+        }
+      } catch (error) {
+        console.error('❌ Auto-migration error:', error);
+      }
+    })();
+    
     // DOM Elements - will be initialized when DOM is ready
     let questionEl, answersEl, progressEl, questionCounterEl, prevBtn, nextBtn, submitBtn, flagBtn;
     let showFlaggedBtn, flagCountEl;
@@ -841,26 +901,83 @@ function scrollToQuestion() {
       return array;
     }
 
+    // Helpers for multi-correct handling
+    function getCorrectLabels(question) {
+      if (!question) return [];
+      const labels = (question.optionLabels || []).slice(); // e.g., ["A","B","C","D"]
+      const pickLabel = (token) => {
+        if (!token) return null;
+        const t = String(token).trim();
+        if (!t) return null;
+        // Support combined like "A/1" or "c/3": split by '/'
+        const parts = t.split('/').map(p => p.trim()).filter(Boolean);
+        let letter = null;
+        let number = null;
+        parts.forEach(p => {
+          const mNum = p.match(/^\d+$/);
+          if (mNum) number = parseInt(p, 10);
+          const mLet = p.match(/^[A-Za-z]$/);
+          if (mLet) letter = mLet[0].toUpperCase();
+        });
+        if (letter && labels.includes(letter)) return letter;
+        if (number && number >= 1 && number <= labels.length) return labels[number - 1];
+        // If token is just a letter or number (no slash)
+        const tUpper = t.toUpperCase();
+        if (/^[A-D]$/.test(tUpper)) return tUpper;
+        const asNum = parseInt(t, 10);
+        if (!Number.isNaN(asNum) && asNum >= 1 && asNum <= labels.length) return labels[asNum - 1];
+        return null;
+      };
+
+      const ans = question.answer;
+      let tokens = [];
+      if (Array.isArray(ans)) tokens = ans;
+      else if (typeof ans === 'string') tokens = ans.split(',');
+      else return [];
+      const mapped = tokens.map(pickLabel).filter(Boolean);
+      // De-duplicate
+      return Array.from(new Set(mapped));
+    }
+
+    function isMulti(question) {
+      const labels = getCorrectLabels(question);
+      return labels.length > 1;
+    }
+
+    function setsEqual(a, b) {
+      if (a.length !== b.length) return false;
+      const sa = new Set(a);
+      for (const x of b) if (!sa.has(x)) return false;
+      return true;
+    }
+
     function shuffleOptions(question) {
       const letterPool = ["A", "B", "C", "D"];
       const pairs = (question.optionLabels || []).map((label, idx) => ({
         label: label,
         text: question.options[idx]
       }));
-      // determine correct option text before shuffling
-      const correctIndex = (question.optionLabels || []).indexOf(question.answer);
-      const correctText = correctIndex >= 0 ? question.options[correctIndex] : null;
+      // determine correct option texts before shuffling (support multi)
+      const originalLabels = (question.optionLabels || []).slice();
+      const correctLabels = getCorrectLabels(question);
+      const correctTexts = correctLabels
+        .map(lbl => {
+          const idx = originalLabels.indexOf(lbl);
+          return idx >= 0 ? question.options[idx] : null;
+        })
+        .filter(t => t !== null);
       shuffleArray(pairs);
       // reassign labels A..D in new order and options accordingly
       question.optionLabels = pairs.map((_, idx) => letterPool[idx]);
       question.options = pairs.map(p => p.text);
-      // set new correct label by matching text
-      if (correctText !== null) {
-        const newIndex = question.options.findIndex(t => t === correctText);
-        if (newIndex >= 0) {
-          question.answer = question.optionLabels[newIndex];
-        }
-      }
+      // set new correct label(s) by matching text
+      const newCorrectLabels = [];
+      correctTexts.forEach(ct => {
+        const newIndex = question.options.findIndex(t => t === ct);
+        if (newIndex >= 0) newCorrectLabels.push(question.optionLabels[newIndex]);
+      });
+      if (newCorrectLabels.length > 1) question.answer = newCorrectLabels;
+      else if (newCorrectLabels.length === 1) question.answer = newCorrectLabels[0];
     }
 
     function shuffleQuestionsAndOptions() {
@@ -873,26 +990,26 @@ function scrollToQuestion() {
     // Initialize quiz
     async function initQuiz() {
   topicId = getTopicId();
-  const progressKey = `quiz_progress_${topicId}`;
-  const oldSession = localStorage.getItem(progressKey);
+  
+  // Check for old session using IndexedDB
+  const oldSession = await quizStorage.getProgress(topicId);
 
   if (oldSession) {
     try {
       const sessionData = JSON.parse(oldSession);
       // Nếu session cũ đã nộp bài thì không hiển thị modal, bắt đầu session mới
       if (sessionData.quizSubmitted) {
-        localStorage.removeItem(progressKey);
-        localStorage.removeItem(`quiz_timer_end_${topicId}`);
-        localStorage.removeItem(`quiz_exam_questions_${topicId}`);
-        localStorage.removeItem(`quiz_timer_paused_${topicId}`);
-        localStorage.removeItem(`quiz_timer_remaining_${topicId}`);
-        continueInitQuiz();
+        await quizStorage.deleteProgress(topicId);
+        await quizStorage.deleteTimerEnd(topicId);
+        await quizStorage.deleteExamQuestions(topicId);
+        await continueInitQuiz();
         return;
       }
     } catch (e) {
       // Nếu không parse được thì xóa session cũ và bắt đầu mới
-      localStorage.removeItem(progressKey);
-      continueInitQuiz();
+      console.error('Error parsing session:', e);
+      await quizStorage.deleteProgress(topicId);
+      await continueInitQuiz();
       return;
     }
     
@@ -900,25 +1017,21 @@ function scrollToQuestion() {
     const modal = document.getElementById('session-modal');
     modal.classList.remove('hidden');
     return new Promise(resolve => {
-      document.getElementById('resume-btn').onclick = () => {
+      document.getElementById('resume-btn').onclick = async () => {
         modal.classList.add('hidden');
         resolve();
       };
-      document.getElementById('new-session-btn').onclick = () => {
-        localStorage.removeItem(progressKey);
-        // reset timer key as well when starting new session
-        localStorage.removeItem(`quiz_timer_end_${topicId}`);
-        // clear cached exam question set to force a fresh randomization
-        localStorage.removeItem(`quiz_exam_questions_${topicId}`);
-        // clear timer pause state
-        localStorage.removeItem(`quiz_timer_paused_${topicId}`);
-        localStorage.removeItem(`quiz_timer_remaining_${topicId}`);
+      document.getElementById('new-session-btn').onclick = async () => {
+        // Delete all session data from IndexedDB
+        await quizStorage.deleteProgress(topicId);
+        await quizStorage.deleteTimerEnd(topicId);
+        await quizStorage.deleteExamQuestions(topicId);
         modal.classList.add('hidden');
         resolve();
       };
     }).then(() => continueInitQuiz());
   } else {
-    continueInitQuiz();
+    await continueInitQuiz();
   }
 }
 
@@ -934,11 +1047,23 @@ async function continueInitQuiz() {
     safeRemoveItem('test_quota');
   }
   
-  // Proactively clear old cache to prevent quota issues
-  clearAllCache();
+  // DON'T clear ALL cache here! It will delete locally created topics!
+  // Only clear if there's actually a quota issue
+  // clearAllCache();
   
-  topics = JSON.parse(safeGetItem('quiz_topics') || '[]');
-  console.log('Topics from localStorage:', topics.length);
+  // Load topics from IndexedDB
+  const topicsStr = await quizStorage.getTopics();
+  topics = JSON.parse(topicsStr || '[]');
+  
+  // Filter out deleted review topics
+  const blacklist = await window.db.getConfig('deleted_review_topics') || [];
+  if (blacklist.length > 0) {
+    const beforeFilter = topics.length;
+    topics = topics.filter(t => !blacklist.includes(t.id));
+    console.log('🗑️ Filtered blacklist. Before:', beforeFilter, 'After:', topics.length, 'Blacklist:', blacklist);
+  }
+  
+  console.log('Topics from IndexedDB:', topics.length);
   console.log('Looking for topicId:', topicId);
   
   topic = topics.find(t => t.id === topicId);
@@ -954,22 +1079,43 @@ async function continueInitQuiz() {
         const remoteTopics = await resp.json();
         console.log('Remote topics loaded:', remoteTopics.length);
         if (Array.isArray(remoteTopics) && remoteTopics.length > 0) {
-          if (safeSetItem('quiz_topics', JSON.stringify(remoteTopics))) {
-            topics = remoteTopics;
+          // IMPORTANT: MERGE local topics with remote topics (don't override!)
+          // Keep locally created topics (e.g., wrong_answers_quiz_...)
+          const localOnlyTopics = topics.filter(t => 
+            t.createdFrom === 'wrong_answers' || t.id.startsWith('wrong_answers_quiz_')
+          );
+          const remoteTopicIds = new Set(remoteTopics.map(t => t.id));
+          const uniqueLocalTopics = localOnlyTopics.filter(t => !remoteTopicIds.has(t.id));
+          let mergedTopics = [...remoteTopics, ...uniqueLocalTopics];
+          
+          // Filter out deleted review topics from merged list
+          if (blacklist.length > 0) {
+            const beforeBlacklist = mergedTopics.length;
+            mergedTopics = mergedTopics.filter(t => !blacklist.includes(t.id));
+            console.log('🗑️ Filtered blacklist from merged. Before:', beforeBlacklist, 'After:', mergedTopics.length);
+          }
+          
+          console.log('Merging: Remote=' + remoteTopics.length + ', Local=' + uniqueLocalTopics.length + ', Total=' + mergedTopics.length);
+          
+          // Save to IndexedDB
+          const saved = await quizStorage.saveTopics(JSON.stringify(mergedTopics));
+          if (saved) {
+            topics = mergedTopics;
             topic = topics.find(t => t.id === topicId);
-            console.log('Topic found after remote fetch:', topic ? topic.name : 'Not found');
+            console.log('Topic found after merge:', topic ? topic.name : 'Not found');
           } else {
-            console.warn('Failed to save topics to localStorage due to quota');
+            console.warn('Failed to save topics to IndexedDB');
             // Clear old cache and try again
-            clearOldCache();
-            if (safeSetItem('quiz_topics', JSON.stringify(remoteTopics))) {
-              topics = remoteTopics;
+            await quizStorage.clearOldProgress(topicId);
+            const savedRetry = await quizStorage.saveTopics(JSON.stringify(mergedTopics));
+            if (savedRetry) {
+              topics = mergedTopics;
               topic = topics.find(t => t.id === topicId);
               console.log('Topic found after clearing cache and remote fetch:', topic ? topic.name : 'Not found');
             } else {
               console.error('Still failed to save topics after clearing cache');
-              // Use topics directly without saving to localStorage
-              topics = remoteTopics;
+              // Use merged topics directly without saving
+              topics = mergedTopics;
               topic = topics.find(t => t.id === topicId);
               console.log('Using topics directly from remote (not cached):', topic ? topic.name : 'Not found');
             }
@@ -999,7 +1145,7 @@ async function continueInitQuiz() {
   // For exams, assemble questions per attempt using current topics based on examConfig
   if (topic.isExam === true && topic.examConfig && Array.isArray(topic.examConfig.distribution)) {
     try {
-      questions = getOrCreateExamSessionQuestions(topic);
+      questions = await getOrCreateExamSessionQuestions(topic);
     } catch (e) {
       console.error('Error getting exam session questions, using fallback:', e);
       questions = topic.questions || [];
@@ -1017,7 +1163,7 @@ async function continueInitQuiz() {
   }
 
   // Shuffle questions and answers nếu không có saved progress
-  const hasSavedProgress = !!localStorage.getItem(`quiz_progress_${topicId}`);
+  const hasSavedProgress = !!(await quizStorage.getProgress(topicId));
   if (!hasSavedProgress) {
     shuffleQuestionsAndOptions();
   }
@@ -1034,7 +1180,7 @@ async function continueInitQuiz() {
   console.log('First user answer:', userAnswers[0]);
 
   // Load saved progress nếu có
-  loadProgress();
+  await loadProgress();
   
   // Ensure flag button is hidden initially if no flagged questions
   const flagCount = userAnswers.filter(a => a.flagged).length;
@@ -1066,12 +1212,11 @@ async function continueInitQuiz() {
       pauseBtn.style.display = 'inline-flex';
       pauseBtn.addEventListener('click', togglePauseResume);
       // restore paused state if any
-      const pausedKey = `quiz_timer_paused_${topicId}`;
-      const remainingKey = `quiz_timer_remaining_${topicId}`;
-      const pausedSaved = localStorage.getItem(pausedKey) === 'true';
-      if (pausedSaved) {
+      const pausedSaved = await quizStorage.getTimerPaused(topicId);
+      if (pausedSaved === 'true') {
         isPaused = true;
-        const remain = parseInt(localStorage.getItem(remainingKey) || '0', 10);
+        const remainingStr = await quizStorage.getTimerRemaining(topicId);
+        const remain = parseInt(remainingStr || '0', 10);
         if (remain > 0) {
           endTimeMs = Date.now() + remain; // keep a reference
           updateTimerDisplay(remain);
@@ -1084,8 +1229,8 @@ async function continueInitQuiz() {
   }
 }
 
-    function loadProgress() {
-      const savedProgress = safeGetItem(`quiz_progress_${topicId}`);
+    async function loadProgress() {
+      const savedProgress = await quizStorage.getProgress(topicId);
       if (savedProgress) {
         try {
           const progress = JSON.parse(savedProgress);
@@ -1098,7 +1243,7 @@ async function continueInitQuiz() {
           } else {
             // If quiz was submitted, clear the progress and start fresh
             quizSubmitted = false;
-            safeRemoveItem(`quiz_progress_${topicId}`);
+            await quizStorage.deleteProgress(topicId);
             // Reset userAnswers to fresh state
             userAnswers = questions.map((q, index) => ({
               answer: null,
@@ -1114,27 +1259,26 @@ async function continueInitQuiz() {
       }
     }
 
-    function saveProgress() {
+    async function saveProgress() {
       const progress = {
         answers: userAnswers,
         currentIndex: currentQuestionIndex,
         quizSubmitted: quizSubmitted,
         timestamp: new Date().toISOString()
       };
-      if (!safeSetItem(`quiz_progress_${topicId}`, JSON.stringify(progress))) {
-        console.warn('Failed to save progress due to storage quota');
+      const saved = await quizStorage.saveProgress(topicId, JSON.stringify(progress));
+      if (!saved) {
+        console.warn('Failed to save progress to IndexedDB');
         // Try to clear old data and save again
-        clearOldCache();
-        safeSetItem(`quiz_progress_${topicId}`, JSON.stringify(progress));
+        await quizStorage.clearOldProgress(topicId);
+        await quizStorage.saveProgress(topicId, JSON.stringify(progress));
       }
     }
 
     // ===== Exam assembly per attempt =====
-    function getOrCreateExamSessionQuestions(examTopic) {
-      const cacheKey = `quiz_exam_questions_${examTopic.id}`;
-      
+    async function getOrCreateExamSessionQuestions(examTopic) {
       // Try to get cached questions first
-      const cached = safeGetItem(cacheKey);
+      const cached = await quizStorage.getExamQuestions(examTopic.id);
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
@@ -1151,7 +1295,8 @@ async function continueInitQuiz() {
       const built = buildExamQuestions(examTopic);
       if (Array.isArray(built) && built.length > 0) {
         // Try to cache, but don't fail if we can't
-        if (safeSetItem(cacheKey, JSON.stringify(built))) {
+        const saved = await quizStorage.saveExamQuestions(examTopic.id, JSON.stringify(built));
+        if (saved) {
           console.log('Cached exam questions successfully');
         } else {
           console.log('Continuing without caching exam questions');
@@ -1353,23 +1498,24 @@ async function continueInitQuiz() {
       }
     }
 
-    function startOrResumeTimer(durationMinutes) {
-      const key = `quiz_timer_end_${topicId}`;
-      const pausedKey = `quiz_timer_paused_${topicId}`;
-      const remainingKey = `quiz_timer_remaining_${topicId}`;
-      const saved = localStorage.getItem(key);
-      const pausedSaved = localStorage.getItem(pausedKey) === 'true';
+    async function startOrResumeTimer(durationMinutes) {
+      const saved = await quizStorage.getTimerEnd(topicId);
+      const pausedSaved = await quizStorage.getTimerPaused(topicId);
+      
       if (saved) {
         endTimeMs = parseInt(saved, 10);
       } else {
         endTimeMs = Date.now() + durationMinutes * 60 * 1000;
-        localStorage.setItem(key, String(endTimeMs));
+        await quizStorage.saveTimerEnd(topicId, String(endTimeMs));
       }
+      
       if (timerEl) timerEl.style.display = 'block';
-      if (pausedSaved) {
+      
+      if (pausedSaved === 'true') {
         // display remaining time without ticking
         isPaused = true;
-        const remain = parseInt(localStorage.getItem(remainingKey) || '0', 10);
+        const remainingStr = await quizStorage.getTimerRemaining(topicId);
+        const remain = parseInt(remainingStr || '0', 10);
         updateTimerDisplay(remain > 0 ? remain : (endTimeMs - Date.now()));
         setPausedUI(true);
       } else {
@@ -1387,26 +1533,24 @@ async function continueInitQuiz() {
       }
     }
 
-    function pauseTimer(){
+    async function pauseTimer(){
       if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
       const remain = Math.max(0, endTimeMs - Date.now());
-      localStorage.setItem(`quiz_timer_paused_${topicId}`, 'true');
-      localStorage.setItem(`quiz_timer_remaining_${topicId}`, String(remain));
+      await quizStorage.saveTimerPaused(topicId, 'true');
+      await quizStorage.saveTimerRemaining(topicId, String(remain));
       isPaused = true;
       setPausedUI(true);
       updateTimerDisplay(remain);
     }
 
-    function resumeTimer(){
-      const remainingKey = `quiz_timer_remaining_${topicId}`;
-      const endKey = `quiz_timer_end_${topicId}`;
-      const pausedKey = `quiz_timer_paused_${topicId}`;
-      const remain = parseInt(localStorage.getItem(remainingKey) || '0', 10);
+    async function resumeTimer(){
+      const remainingStr = await quizStorage.getTimerRemaining(topicId);
+      const remain = parseInt(remainingStr || '0', 10);
       const base = isNaN(remain) || remain <= 0 ? (endTimeMs - Date.now()) : remain;
       endTimeMs = Date.now() + Math.max(0, base);
-      localStorage.setItem(endKey, String(endTimeMs));
-      localStorage.removeItem(remainingKey);
-      localStorage.setItem(pausedKey, 'false');
+      await quizStorage.saveTimerEnd(topicId, String(endTimeMs));
+      await quizStorage.saveTimerRemaining(topicId, '0'); // Clear remaining
+      await quizStorage.saveTimerPaused(topicId, 'false');
       isPaused = false;
       setPausedUI(false);
       updateTimer();
@@ -1453,6 +1597,16 @@ async function continueInitQuiz() {
       // Update question text - with safety check
       if (questionEl && question) {
         questionEl.textContent = question.question;
+        // Add or update hint under question about single/multi select
+        let hintEl = document.getElementById('question-hint');
+        if (!hintEl) {
+          hintEl = document.createElement('div');
+          hintEl.id = 'question-hint';
+          hintEl.className = 'question-hint';
+          questionEl.insertAdjacentElement('afterend', hintEl);
+        }
+        const multiHint = isMulti(question) ? '(Câu hỏi chọn nhiều đáp án)' : '(Câu hỏi chọn 1 đáp án)';
+        hintEl.textContent = multiHint;
       } else {
         console.error('questionEl or question is null:', { questionEl, question });
       }
@@ -1467,9 +1621,14 @@ async function continueInitQuiz() {
           question.optionLabels.forEach((label, i) => {
             const answer = question.options[i];
             const answerEl = document.createElement('div');
-            const isSelected = userAnswer.answer === label;
-            const isCorrect = label === question.answer;
-            const reveal = quizSubmitted || userAnswer.answer !== null;
+            const multi = isMulti(question);
+            const correctLabels = getCorrectLabels(question);
+            const isSelected = multi
+              ? Array.isArray(userAnswer.answer) && userAnswer.answer.includes(label)
+              : userAnswer.answer === label;
+            const isCorrect = correctLabels.includes(label);
+            const hasAnswer = Array.isArray(userAnswer.answer) ? userAnswer.answer.length > 0 : userAnswer.answer !== null;
+            const reveal = quizSubmitted || hasAnswer;
             
             let answerClass = 'answer';
             if (isSelected) answerClass += ' selected';
@@ -1479,13 +1638,28 @@ async function continueInitQuiz() {
             }
             
             answerEl.className = answerClass;
+            const inputType = multi ? 'checkbox' : 'radio';
+            const checkedAttr = isSelected ? 'checked' : '';
+            const disabledAttr = quizSubmitted ? 'disabled' : '';
             answerEl.innerHTML = `
+              <input type="${inputType}" class="answer-input" name="answer-group" ${checkedAttr} ${disabledAttr} />
               <span class="option">${label}.</span>
               <span class="text">${answer}</span>
             `;
             
             if (!quizSubmitted) {
-              answerEl.onclick = () => selectAnswer(label);
+              answerEl.onclick = () => {
+                if (multi) toggleMultiAnswer(label);
+                else selectAnswer(label);
+              };
+              const inputEl = answerEl.querySelector('.answer-input');
+              if (inputEl) {
+                inputEl.addEventListener('change', (e) => {
+                  e.stopPropagation();
+                  if (multi) toggleMultiAnswer(label);
+                  else selectAnswer(label);
+                });
+              }
             }
             
             answersEl.appendChild(answerEl);
@@ -1547,7 +1721,7 @@ updateNextBtnStatus();
       
       const questionItems = userAnswers.map((userAnswer, index) => {
         const isCurrent = index === currentQuestionIndex;
-        const isAnswered = userAnswer.answer !== null;
+        const isAnswered = Array.isArray(userAnswer.answer) ? userAnswer.answer.length > 0 : userAnswer.answer !== null;
         const isCorrect = userAnswer.correct === true;
         const isIncorrect = userAnswer.correct === false;
         const isFlagged = userAnswer.flagged;
@@ -1644,11 +1818,12 @@ updateNextBtnStatus();
       if (quizSubmitted || isPaused) return;
       
       const userAnswer = userAnswers[currentQuestionIndex];
+      const question = questions[currentQuestionIndex];
+      const correctLabels = getCorrectLabels(question);
       userAnswer.answer = answer;
-      userAnswer.correct = answer === questions[currentQuestionIndex].answer;
+      userAnswer.correct = correctLabels.length === 1 && answer === correctLabels[0];
       
       // Show explanation if available
-      const question = questions[currentQuestionIndex];
       if (question.explain) {
         showExplanation(question.explain);
         userAnswer.explanationShown = true;
@@ -1695,7 +1870,7 @@ requestAnimationFrame(() => {
 
 
     // Statistics and wrong answers tracking
-    function saveWrongAnswers() {
+    async function saveWrongAnswers() {
       const wrongAnswers = [];
       const correctAnswers = [];
       
@@ -1714,18 +1889,17 @@ requestAnimationFrame(() => {
           timestamp: new Date().toISOString()
         };
         
-        if (userAnswer.answer && !userAnswer.correct) {
+        const answered = Array.isArray(userAnswer.answer) ? userAnswer.answer.length > 0 : !!userAnswer.answer;
+        if (answered && !userAnswer.correct) {
           wrongAnswers.push(answerData);
-        } else if (userAnswer.answer && userAnswer.correct) {
+        } else if (answered && userAnswer.correct) {
           correctAnswers.push(answerData);
         }
       });
       
-      // Save wrong answers to localStorage
+      // Save wrong answers to IndexedDB
       if (wrongAnswers.length > 0) {
-        const existingWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
-        existingWrongAnswers.push(...wrongAnswers);
-        localStorage.setItem('wrong_answers', JSON.stringify(existingWrongAnswers));
+        await quizStorage.addWrongAnswers(wrongAnswers);
       }
       
       // Get user info from modal - lưu chính xác giá trị đã nhập
@@ -1749,9 +1923,7 @@ requestAnimationFrame(() => {
         fullname: finalFullname,
         branch: finalBranch
       };
-      const existingStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
-      existingStats.push(sessionStats);
-      localStorage.setItem('quiz_statistics', JSON.stringify(existingStats));
+      await quizStorage.addStatistic(sessionStats);
       
       console.log('Saved statistics:', sessionStats);
       console.log('Wrong answers saved:', wrongAnswers.length);
@@ -1762,8 +1934,8 @@ requestAnimationFrame(() => {
       }
     }
     
-    function getWrongAnswersByTopic(topicId) {
-      const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
+    async function getWrongAnswersByTopic(topicId) {
+      const allWrongAnswers = await window.db.getWrongAnswers();
       return allWrongAnswers.filter(answer => answer.topicId === topicId);
     }
     
@@ -1889,7 +2061,7 @@ requestAnimationFrame(() => {
       }, 100);
     }
 
-    function confirmSubmitQuiz() {
+    async function confirmSubmitQuiz() {
       if (quizSubmitted) return;
       
       // Đóng modal (không cần kiểm tra bắt buộc nữa)
@@ -1898,16 +2070,15 @@ requestAnimationFrame(() => {
       // Nộp bài
       quizSubmitted = true;
       showResults();
-      saveProgress();
-      saveWrongAnswers();
+      await saveProgress();
+      await saveWrongAnswers();
       // clear timer keys
-      localStorage.removeItem(`quiz_timer_end_${topicId}`);
-      localStorage.removeItem(`quiz_timer_paused_${topicId}`);
-      localStorage.removeItem(`quiz_timer_remaining_${topicId}`);
+      await quizStorage.deleteTimerEnd(topicId);
     }
 function getAnswerStatus(index){
   const ua = userAnswers?.[index];
-  if (!ua || ua.answer == null) return { text: "Chưa chọn", cls: "status-pending" };
+  const answered = !ua ? false : (Array.isArray(ua.answer) ? ua.answer.length > 0 : ua.answer != null);
+  if (!answered) return { text: "Chưa chọn", cls: "status-pending" };
   return ua.correct ? { text: "ĐÃ CHỌN: ĐÚNG", cls: "status-correct" }
                     : { text: "ĐÃ CHỌN: SAI",  cls: "status-incorrect" };
 }
@@ -1997,17 +2168,17 @@ function updateNextBtnStatus(){
       }
       
       if (restartBtn) {
-        restartBtn.addEventListener('click', () => {
+        restartBtn.addEventListener('click', async () => {
           // Clear quiz progress and reset state to the very beginning
-          localStorage.removeItem(`quiz_progress_${topicId}`);
+          await quizStorage.deleteProgress(topicId);
           // Reset timer end and start fresh if timed
-          localStorage.removeItem(`quiz_timer_end_${topicId}`);
+          await quizStorage.deleteTimerEnd(topicId);
           // For exams: clear cached selection so a new random set is built
-          localStorage.removeItem(`quiz_exam_questions_${topicId}`);
+          await quizStorage.deleteExamQuestions(topicId);
           quizSubmitted = false;
           // Rebuild questions for exams; otherwise reuse topic.questions
           if (topic.isExam === true && topic.examConfig && Array.isArray(topic.examConfig.distribution)) {
-            questions = getOrCreateExamSessionQuestions(topic);
+            questions = await getOrCreateExamSessionQuestions(topic);
           }
           // Shuffle order and options for a new attempt
           shuffleQuestionsAndOptions();
@@ -2056,15 +2227,15 @@ function updateNextBtnStatus(){
     }
 
     
-    function showLeaderboard() {
+    async function showLeaderboard() {
       // Remove any existing leaderboard modal
       const existingModal = document.querySelector('.leaderboard-modal');
       if (existingModal) {
         existingModal.remove();
       }
       
-      const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
-      const topicStats = allStats.filter(stat => stat.topicId === topicId);
+      const allStats = await window.db.getStatisticsByTopic(topicId) || [];
+      const topicStats = allStats;
       
       // Sort by score descending, then by timestamp (newest first for same score)
       const sortedStats = topicStats.sort((a, b) => {
@@ -2199,14 +2370,14 @@ function updateNextBtnStatus(){
       document.body.appendChild(modal);
     }
     
-    function showWrongAnswers() {
+    async function showWrongAnswers() {
       // Remove any existing wrong answers modal
       const existingModal = document.querySelector('.wrong-answers-modal');
       if (existingModal) {
         existingModal.remove();
       }
       
-      const wrongAnswers = getWrongAnswersByTopic(topicId);
+      const wrongAnswers = await getWrongAnswersByTopic(topicId);
       
       if (wrongAnswers.length === 0) {
         alert('Bạn chưa có câu trả lời sai nào trong chuyên đề này! 🎉');
@@ -2444,8 +2615,8 @@ function updateNextBtnStatus(){
     }
 
 
-    window.exportWrongAnswersExcel = function(topicId) {
-      const wrongAnswers = getWrongAnswersByTopic(topicId);
+    window.exportWrongAnswersExcel = async function(topicId) {
+      const wrongAnswers = await getWrongAnswersByTopic(topicId);
       
       if (wrongAnswers.length === 0) {
         alert('Không có câu trả lời sai nào để xuất!');
@@ -2503,8 +2674,8 @@ function updateNextBtnStatus(){
     };
 
     
-    window.exportWrongAnswers = function(topicId) {
-      const wrongAnswers = getWrongAnswersByTopic(topicId);
+    window.exportWrongAnswers = async function(topicId) {
+      const wrongAnswers = await getWrongAnswersByTopic(topicId);
       
       if (wrongAnswers.length === 0) {
         alert('Không có câu trả lời sai nào để xuất!');
@@ -2550,7 +2721,9 @@ function updateNextBtnStatus(){
       <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 20px; margin-bottom: 12px;">
         <div style="flex: 1; min-width: 250px;">
           <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-            <img src="logo.png" alt="Logo" style="width: 40px; height: 40px; object-fit: contain; filter: brightness(0) invert(1);">
+            <div style="width: 35px !important; height: 35px !important; background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important; border-radius: 8px !important; padding: 2px !important; border: 2px solid rgba(255,255,255,0.9) !important; box-shadow: 0 3px 8px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.8) !important; display: flex !important; align-items: center !important; justify-content: center !important; transition: all 0.3s ease !important; position: relative !important; overflow: hidden !important;" onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2), 0 2px 6px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.9)'" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 3px 8px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.8)'">
+              <img src="logo-new.png?v=20250112" alt="Logo Agribank" style="width: 100% !important; height: 100% !important; object-fit: contain !important; filter: none !important; -webkit-filter: none !important; -moz-filter: none !important; -ms-filter: none !important; -o-filter: none !important; transition: all 0.3s ease !important;" onerror="console.error('Logo load failed:', this.src); this.style.display='none';">
+            </div>
             <div>
               <h3 style="font-size: 0.9em; margin: 0 0 2px; color: #fff; font-weight: 600;">Hệ thống ôn luyện trắc nghiệm</h3>
               <p style="margin: 0; color: rgba(255, 255, 255, 0.8); font-size: 0.75em;">Chi nhánh Cần Thơ II</p>

@@ -4,8 +4,14 @@
   <meta charset="UTF-8">
   <title>Hệ thống ôn luyện trắc nghiệm Chi nhánh Cần Thơ II</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="mobile-enhancements.css">
+  
+  <!-- Force browser to reload fresh content (no cache) -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  
+  <link rel="stylesheet" href="styles.css?v=20250112">
+  <link rel="stylesheet" href="mobile-enhancements.css?v=20250112">
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   
   <!-- Theme and PWA meta tags -->
@@ -36,7 +42,9 @@
   <link rel="icon" type="image/png" sizes="192x192" href="logo.png">
   <link rel="icon" type="image/png" sizes="512x512" href="logo.png">
   <!-- Config file -->
-  <script src="config.js"></script>
+  <script src="config.js?v=20250112"></script>
+  <script src="indexeddb-storage.js?v=20250112"></script>
+  <script src="storage-wrapper.js?v=20250112"></script>
   <style>
     @keyframes spin {
       0% { transform: rotate(0deg); }
@@ -103,7 +111,7 @@
   <div class="container">
     <header>
       <div class="logo">
-        <img src="./logo.png" alt="Logo" id="logo-img" onerror="console.error('Logo load failed:', this.src); this.style.display='none';">
+        <img src="logo.png" alt="Logo" id="logo-img" onerror="console.error('Logo load failed:', this.src);">
         <div class="logo-text">
           <h1>Hệ thống ôn luyện trắc nghiệm</h1>
           <p>Chi nhánh Cần Thơ II</p>
@@ -182,14 +190,14 @@
           <a href="admin.html" class="btn btn-outline admin-btn">
             <i class="material-icons">admin_panel_settings</i> Quản trị viên
           </a>
-          <button id="clear-cookies-btn" type="button" class="btn btn-outline admin-btn">
-            <i class="material-icons">delete</i> Xóa cookie
+          <button id="hard-reload-btn" type="button" class="btn btn-outline admin-btn" title="🔄 Cập nhật CODE mới (JS/CSS/HTML) - Tương đương Ctrl+Shift+R">
+            <i class="material-icons">refresh</i> Hard Reload (Code)
           </button>
-          <button id="clear-storage-btn" type="button" class="btn btn-outline admin-btn">
-            <i class="material-icons">delete_sweep</i> Xóa bộ nhớ
+          <button id="refresh-data-btn" type="button" class="btn btn-outline admin-btn" title="📥 Cập nhật NỘI DUNG câu hỏi mới từ topics.json (không reload trang)">
+            <i class="material-icons">cloud_download</i> Tải câu hỏi mới
           </button>
-          <button id="refresh-data-btn" type="button" class="btn btn-outline admin-btn">
-            <i class="material-icons">refresh</i> Tải lại dữ liệu
+          <button id="clear-storage-btn" type="button" class="btn btn-outline admin-btn" title="🗑️ Xóa TOÀN BỘ dữ liệu: IndexedDB, LocalStorage, Cache (reset về ban đầu)">
+            <i class="material-icons">delete_sweep</i> Xóa toàn bộ dữ liệu
           </button>
           <button id="global-stats-btn" type="button" class="btn btn-outline admin-btn">
             <i class="material-icons">analytics</i> Thống kê tổng quát
@@ -200,6 +208,132 @@
 
     <script>
       document.addEventListener('DOMContentLoaded', function() {
+        // 🔄 Auto-cleanup: Xóa localStorage cũ (quiz progress đã chuyển sang IndexedDB)
+        // Chỉ giữ lại admin credentials và deleted_review_topics
+        const keysToKeep = ['admin_credentials', 'admin_authenticated', 'deleted_review_topics', 'deleted_review_topics_map'];
+        const keysToRemove = [];
+        
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && !keysToKeep.includes(key)) {
+              keysToRemove.push(key);
+            }
+          }
+          
+          // Xóa các key không cần thiết (đặc biệt là quiz_topics cũ)
+          if (keysToRemove.length > 0) {
+            console.log('🧹 Cleaning up old localStorage keys:', keysToRemove);
+            keysToRemove.forEach(key => {
+              try {
+                localStorage.removeItem(key);
+              } catch (e) {
+                console.error('Error removing key:', key, e);
+              }
+            });
+          }
+          
+          // Force clear quiz_topics if it exists (đảm bảo không còn data cũ)
+          if (localStorage.getItem('quiz_topics')) {
+            console.log('🗑️ Removing old quiz_topics from localStorage');
+            localStorage.removeItem('quiz_topics');
+          }
+        } catch (e) {
+          console.error('Error during cleanup:', e);
+          // If localStorage is full, show alert immediately
+          if (e.name === 'QuotaExceededError') {
+            const shouldClear = confirm(
+              '⚠️ CẢNH BÁO: Bộ nhớ LocalStorage đã đầy!\n\n' +
+              'Browser của bạn có thể đang cache code cũ.\n\n' +
+              '✅ GIẢI PHÁP:\n' +
+              '1. Click OK để xóa dữ liệu cũ\n' +
+              '2. Sau đó nhấn Ctrl+Shift+R\n' +
+              '   (hard reload để xóa cache)\n\n' +
+              'Tiếp tục?'
+            );
+            
+            if (shouldClear) {
+              try {
+                // Save critical data to sessionStorage temporarily
+                keysToKeep.forEach(key => {
+                  try {
+                    const value = localStorage.getItem(key);
+                    if (value) {
+                      sessionStorage.setItem(key, value);
+                    }
+                  } catch (err) {
+                    console.error('Error saving to sessionStorage:', err);
+                  }
+                });
+                
+                // Clear localStorage
+                localStorage.clear();
+                
+                // Restore critical data
+                keysToKeep.forEach(key => {
+                  try {
+                    const value = sessionStorage.getItem(key);
+                    if (value) {
+                      localStorage.setItem(key, value);
+                      sessionStorage.removeItem(key);
+                    }
+                  } catch (err) {
+                    console.error('Error restoring from sessionStorage:', err);
+                  }
+                });
+                
+                console.log('✅ Forced localStorage cleanup due to quota exceeded');
+                alert('✅ Đã xóa xong!\n\n🔄 BÂY GIỜ NHẤN:\n• Ctrl+Shift+R (Windows)\n• Cmd+Shift+R (Mac)\n\nđể tải code mới!');
+              } catch (cleanupError) {
+                console.error('Failed to cleanup localStorage:', cleanupError);
+                alert('❌ Lỗi khi xóa.\n\nVui lòng:\n1. F12 → Application → Storage\n2. Clear site data\n3. Reload');
+              }
+            }
+          }
+        }
+        
+        // 🔄 AUTO-MIGRATION: Copy data từ localStorage sang IndexedDB
+        (async function autoMigrateToIndexedDB() {
+          try {
+            // Wait for IndexedDB to be ready
+            if (window.db && window.db.ready) {
+              await window.db.ready;
+              
+              // Check if we have data in localStorage that needs migration
+              const hasLocalStats = localStorage.getItem('quiz_statistics');
+              const hasLocalWrongAnswers = localStorage.getItem('wrong_answers');
+              const hasLocalBlacklist = localStorage.getItem('deleted_review_topics');
+              
+              if (hasLocalStats || hasLocalWrongAnswers || hasLocalBlacklist) {
+                console.log('📦 Found data in localStorage, starting migration to IndexedDB...');
+                
+                // Perform migration
+                const migrated = await window.db.migrateFromLocalStorage();
+                
+                if (migrated.statistics > 0 || migrated.wrongAnswers > 0 || migrated.config > 0) {
+                  console.log('✅ Migration completed:', migrated);
+                  
+                  // Clear migrated data from localStorage to save space
+                  if (migrated.statistics > 0) {
+                    localStorage.removeItem('quiz_statistics');
+                    console.log('🗑️ Removed quiz_statistics from localStorage');
+                  }
+                  if (migrated.wrongAnswers > 0) {
+                    localStorage.removeItem('wrong_answers');
+                    console.log('🗑️ Removed wrong_answers from localStorage');
+                  }
+                  // Keep blacklist in localStorage as backup for now
+                }
+              } else {
+                console.log('✅ No data to migrate from localStorage');
+              }
+            }
+          } catch (error) {
+            console.error('❌ Auto-migration error:', error);
+            // Don't show alert, just log - migration will retry next time
+          }
+        })();
+        
         const topicSelect = document.getElementById('topic-select');
         const examSelect = document.getElementById('exam-select');
         const topicInfo = document.getElementById('topic-info');
@@ -208,7 +342,7 @@
         const examDescription = document.getElementById('exam-description');
         const topicStartBtn = document.getElementById('topic-start-btn');
         const examStartBtn = document.getElementById('exam-start-btn');
-        const clearCookiesBtn = document.getElementById('clear-cookies-btn');
+        const hardReloadBtn = document.getElementById('hard-reload-btn');
         const clearStorageBtn = document.getElementById('clear-storage-btn');
         const refreshDataBtn = document.getElementById('refresh-data-btn');
         const globalStatsBtn = document.getElementById('global-stats-btn');
@@ -280,41 +414,117 @@
           if (loading) loading.remove();
         }
 
-        function clearAllCookies() {
+        // Hard Reload function (tương đương Ctrl+Shift+R)
+        async function performHardReload() {
           try {
-            const cookies = document.cookie ? document.cookie.split(';') : [];
-            const past = 'Thu, 01 Jan 1970 00:00:00 GMT';
-            const hostnameParts = location.hostname ? location.hostname.split('.') : [];
-            const domains = [''];
-            for (let i = 0; i < hostnameParts.length; i++) {
-              const d = '.' + hostnameParts.slice(i).join('.');
-              if (d !== '.') domains.push(d);
-            }
-            const paths = Array.from(new Set(['/','/' + location.pathname.split('/').filter(Boolean).join('/')]))
-                              .filter(Boolean);
-
-            for (const c of cookies) {
-              const eqPos = c.indexOf('=');
-              const name = (eqPos > -1 ? c.substr(0, eqPos) : c).trim();
-              for (const domain of domains) {
-                for (const p of paths) {
-                  document.cookie = `${name}=; expires=${past}; path=${p};${domain ? ` domain=${domain};` : ''} SameSite=Lax`;
-                }
+            let actions = [];
+            
+            // 1. Clear Service Worker cache (không unregister SW)
+            if ('caches' in window) {
+              const cacheNames = await caches.keys();
+              for (const cacheName of cacheNames) {
+                await caches.delete(cacheName);
+                actions.push(`✓ Xóa cache: ${cacheName}`);
               }
             }
-            alert('Đã xóa tất cả cookie của trang.');
+            
+            // 2. Tell Service Worker to skip waiting (if there's an update)
+            if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+              navigator.serviceWorker.controller.postMessage({ action: 'skipWaiting' });
+              actions.push('✓ Service Worker: skip waiting');
+            }
+            
+            console.log('✅ Hard Reload actions:', actions);
+            
+            // 3. Force reload (bypass cache)
+            // Use multiple methods to ensure cache bypass
+            setTimeout(() => {
+              window.location.reload(true); // Force reload from server
+            }, 100);
+            
           } catch (e) {
-            alert('Không thể xóa cookie: ' + (e && e.message ? e.message : e));
+            console.error('❌ Error during hard reload:', e);
+            // Fallback: simple reload
+            alert('⚠️ Có lỗi khi xóa cache.\n\nĐang reload trang...');
+            window.location.reload(true);
           }
         }
 
-        function clearWebStorage() {
+        async function clearWebStorage() {
+          const confirmed = confirm(
+            '⚠️ CẢNH BÁO: Xóa toàn bộ dữ liệu!\n\n' +
+            'Hành động này sẽ xóa:\n' +
+            '✓ IndexedDB (quiz progress, statistics, wrong answers)\n' +
+            '✓ LocalStorage (settings)\n' +
+            '✓ SessionStorage (temporary data)\n' +
+            '✓ Browser cache\n\n' +
+            'Bạn có chắc chắn muốn tiếp tục?'
+          );
+          
+          if (!confirmed) return;
+          
           try {
+            let deletedItems = [];
+            
+            // 1. Clear IndexedDB
+            if (window.indexedDB) {
+              try {
+                const dbs = await window.indexedDB.databases();
+                for (const db of dbs) {
+                  window.indexedDB.deleteDatabase(db.name);
+                  deletedItems.push(`IndexedDB: ${db.name}`);
+                }
+              } catch (e) {
+                console.error('Error deleting IndexedDB:', e);
+                // Fallback: delete known database
+                window.indexedDB.deleteDatabase('QuizAppDB');
+                deletedItems.push('IndexedDB: QuizAppDB');
+              }
+            }
+            
+            // 2. Clear localStorage
             localStorage.clear();
+            deletedItems.push('LocalStorage');
+            
+            // 3. Clear sessionStorage
             sessionStorage.clear();
-            alert('Đã xóa localStorage và sessionStorage.');
+            deletedItems.push('SessionStorage');
+            
+            // 4. Clear Service Worker cache
+            if ('caches' in window) {
+              const cacheNames = await caches.keys();
+              for (const cacheName of cacheNames) {
+                await caches.delete(cacheName);
+                deletedItems.push(`Cache: ${cacheName}`);
+              }
+            }
+            
+            // 5. Unregister Service Worker
+            if ('serviceWorker' in navigator) {
+              const registrations = await navigator.serviceWorker.getRegistrations();
+              for (const registration of registrations) {
+                await registration.unregister();
+                deletedItems.push('Service Worker');
+              }
+            }
+            
+            console.log('✅ Deleted:', deletedItems);
+            
+            alert(
+              '✅ Đã xóa thành công!\n\n' +
+              'Đã xóa:\n' +
+              deletedItems.map(item => '• ' + item).join('\n') + '\n\n' +
+              '🔄 Trang sẽ tự động reload...'
+            );
+            
+            // Reload page after 2 seconds
+            setTimeout(() => {
+              window.location.reload(true);
+            }, 2000);
+            
           } catch (e) {
-            alert('Không thể xóa web storage: ' + (e && e.message ? e.message : e));
+            console.error('Error clearing storage:', e);
+            alert('⚠️ Có lỗi khi xóa dữ liệu:\n' + (e && e.message ? e.message : e));
           }
         }
 
@@ -331,10 +541,7 @@
             const sizeInMB = (totalSize / (1024 * 1024)).toFixed(2);
             const quotaLimit = 5; // 5MB là giới hạn phổ biến
             
-            console.log(`LocalStorage usage: ${sizeInMB}MB / ${quotaLimit}MB`);
-            
             if (parseFloat(sizeInMB) > quotaLimit * 0.8) {
-              console.warn('LocalStorage đang sử dụng hơn 80% quota!');
               return {
                 used: parseFloat(sizeInMB),
                 limit: quotaLimit,
@@ -350,45 +557,94 @@
               warning: false
             };
           } catch (e) {
-            console.error('Error checking localStorage usage:', e);
             return null;
           }
         }
 
         // Xử lý lỗi QuotaExceededError
         function handleQuotaExceededError(error, context = '') {
-          console.error(`QuotaExceededError in ${context}:`, error);
+          console.error('❌ QuotaExceededError:', error, 'Context:', context);
           
-          const usage = checkLocalStorageUsage();
-          if (usage) {
-            alert(`⚠️ Lỗi vượt quá dung lượng lưu trữ!\n\n` +
-                  `Đã sử dụng: ${usage.used}MB / ${usage.limit}MB (${usage.percentage}%)\n\n` +
-                  `Vui lòng:\n` +
-                  `1. Nhấn "Xóa bộ nhớ" để giải phóng dung lượng\n` +
-                  `2. Hoặc xóa dữ liệu cũ trong thống kê\n` +
-                  `3. Liên hệ admin nếu vấn đề tiếp tục`);
-          } else {
-            alert(`⚠️ Lỗi vượt quá dung lượng lưu trữ!\n\n` +
-                  `Vui lòng nhấn "Xóa bộ nhớ" để giải phóng dung lượng.`);
-          }
-        }
-
-        // Wrapper function để lưu dữ liệu an toàn
-        function safeLocalStorageSet(key, value) {
-          try {
-            localStorage.setItem(key, value);
-            return true;
-          } catch (error) {
-            if (error.name === 'QuotaExceededError') {
-              handleQuotaExceededError(error, `saving ${key}`);
-              return false;
+          // Alert user với hướng dẫn rõ ràng
+          const shouldReload = confirm(
+            '⚠️ Lỗi: Bộ nhớ LocalStorage đã đầy!\n\n' +
+            'Hệ thống đã chuyển sang IndexedDB (không giới hạn).\n\n' +
+            '🔧 CÁCH SỬA:\n' +
+            '1. Click OK để xóa dữ liệu cũ\n' +
+            '2. Sau đó nhấn Ctrl+Shift+R (hard reload)\n' +
+            '   hoặc Ctrl+F5 để tải lại trang\n\n' +
+            'Dữ liệu quiz của bạn sẽ an toàn trong IndexedDB!'
+          );
+          
+          if (shouldReload) {
+            try {
+              // Clear localStorage except critical keys
+              const keysToKeep = ['admin_credentials', 'admin_authenticated', 'deleted_review_topics', 'deleted_review_topics_map'];
+              const allKeys = [];
+              for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key) allKeys.push(key);
+              }
+              
+              allKeys.forEach(key => {
+                if (!keysToKeep.includes(key)) {
+                  try {
+                    localStorage.removeItem(key);
+                  } catch (e) {
+                    console.error('Error removing key:', key, e);
+                  }
+                }
+              });
+              
+              alert('✅ Đã xóa dữ liệu cũ!\n\nBây giờ hãy nhấn:\n• Ctrl+Shift+R (Windows/Linux)\n• hoặc Cmd+Shift+R (Mac)\n\nđể tải lại trang với code mới!');
+            } catch (e) {
+              console.error('Error clearing localStorage:', e);
+              alert('⚠️ Không thể xóa localStorage.\n\nVui lòng thử:\n1. Mở DevTools (F12)\n2. Application → Storage → Clear site data\n3. Reload trang');
             }
-            throw error;
           }
         }
 
-        if (clearCookiesBtn) {
-          clearCookiesBtn.addEventListener('click', clearAllCookies);
+        // Helper function to get topics from IndexedDB (primary) or localStorage (fallback)
+        async function getTopicsFromStorage() {
+          // Try IndexedDB first (unlimited storage)
+          if (window.db) {
+            try {
+              // Try to get from quiz_topics store first
+              const topics = await window.db.getTopics();
+              if (topics && topics.length > 0) {
+                return topics;
+              }
+              
+              // Fallback to config store for backward compatibility
+              const topicsStr = await window.db.getConfig('quiz_topics');
+              if (topicsStr) {
+                return JSON.parse(topicsStr);
+              }
+            } catch (e) {
+              console.error('Error loading from IndexedDB:', e);
+            }
+          }
+          
+          // Fallback to localStorage (legacy, limited to 5MB)
+          // This is only for backward compatibility
+          try {
+            const topicsStr = localStorage.getItem('quiz_topics');
+            if (topicsStr) {
+              console.log('⚠️ Loading from localStorage (legacy). Data will be migrated to IndexedDB.');
+              return JSON.parse(topicsStr);
+            }
+          } catch (e) {
+            console.error('Error loading from localStorage:', e);
+          }
+          
+          return [];
+        }
+        
+        // Expose function globally
+        window.getTopicsFromStorage = getTopicsFromStorage;
+
+        if (hardReloadBtn) {
+          hardReloadBtn.addEventListener('click', performHardReload);
         }
 
         if (clearStorageBtn) {
@@ -397,10 +653,43 @@
 
 
         if (refreshDataBtn) {
-          refreshDataBtn.addEventListener('click', function() {
-            // Clear cached data and reload
-            localStorage.removeItem('quiz_topics');
-            loadTopics();
+          refreshDataBtn.addEventListener('click', async function() {
+            try {
+              console.log('🔄 Bắt đầu tải câu hỏi mới từ server...');
+              
+              // 1. Clear topics.json cache from IndexedDB
+              if (window.db && window.db.ready) {
+                await window.db.deleteConfig('quiz_topics');
+                console.log('✅ Đã xóa cache quiz_topics từ IndexedDB');
+              }
+              
+              // 2. Clear legacy localStorage cache (if any)
+              localStorage.removeItem('quiz_topics');
+              
+              // 3. Clear Service Worker cache for topics.json
+              if ('caches' in window) {
+                const cacheNames = await caches.keys();
+                for (const cacheName of cacheNames) {
+                  const cache = await caches.open(cacheName);
+                  const keys = await cache.keys();
+                  for (const request of keys) {
+                    if (request.url.includes('topics.json')) {
+                      await cache.delete(request);
+                      console.log('✅ Đã xóa cache topics.json từ Service Worker');
+                    }
+                  }
+                }
+              }
+              
+              // 4. Reload topics from server (without page reload)
+              await loadTopics();
+              
+              console.log('✅ Đã tải câu hỏi mới thành công! Danh sách chuyên đề đã được cập nhật.');
+              
+            } catch (e) {
+              console.error('❌ Lỗi khi tải câu hỏi mới:', e);
+              alert('⚠️ Có lỗi khi tải câu hỏi mới:\n\n' + (e.message || e) + '\n\n💡 Thử "Hard Reload (Code)" nếu vẫn lỗi.');
+            }
           });
         }
 
@@ -420,14 +709,12 @@
       }
 
       try {
-        console.log('Testing Google Sheets connection...');
         const response = await fetch(`${window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL}?action=test`, {
           method: 'GET',
           mode: 'cors'
         });
         
         const text = await response.text();
-        console.log('Test response:', text);
         
         if (text.includes('working')) {
           alert('✅ Kết nối Google Sheets thành công!\n\n' + text);
@@ -435,7 +722,6 @@
           alert('⚠️ Google Sheets phản hồi nhưng có thể có vấn đề:\n\n' + text);
         }
       } catch (error) {
-        console.error('Google Sheets test error:', error);
         alert('❌ Không thể kết nối Google Sheets:\n\n' + error.message + '\n\nVui lòng kiểm tra:\n- URL Google Script\n- Cấu hình CORS\n- Quyền truy cập');
       }
     }
@@ -459,62 +745,79 @@
       const originalBodyContent = document.body.innerHTML;
       window.originalBodyContent = originalBodyContent;
       
-      // Thử lấy dữ liệu từ Google Sheets trước
-      let allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
-      let allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
+      // Chỉ lấy dữ liệu từ Google Sheets, không dùng local data
+      let allStats = [];
+      let allWrongAnswers = [];
+      let uniqueQuestionsByTopic = {}; // Initialize here
       
-      // Nếu có cấu hình Google Sheets, thử lấy dữ liệu từ đó
-      if (window.QUIZ_CONFIG && window.QUIZ_CONFIG.ENABLE_CLOUD_SYNC && window.isConfigured()) {
-        try {
-          console.log('Trying to load statistics from Google Sheets...');
-          console.log('Google Script URL:', window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL);
+      // Kiểm tra cấu hình Google Sheets
+      if (!window.QUIZ_CONFIG || !window.QUIZ_CONFIG.ENABLE_CLOUD_SYNC || !window.isConfigured()) {
+        alert('❌ Chức năng thống kê tổng quát yêu cầu kết nối Google Sheets!\n\n' +
+              'Vui lòng cấu hình Google Sheets trong config.js để sử dụng tính năng này.');
+        return;
+      }
+      
+      // Lấy dữ liệu từ Google Sheets
+      try {
+        console.log('🌐 Fetching statistics from Google Sheets...');
           
-          const response = await fetch(`${window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL}?action=getStatistics`, {
-            method: 'GET',
-            mode: 'cors',
-            headers: {
-              'Accept': 'application/json',
-            }
-          });
+        // Use JSONP to avoid CORS issues
+        const timestamp = Date.now();
+        const url = `${window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL}?action=getStatistics&_t=${timestamp}`;
+
+        console.log('🌐 Fetching statistics from URL:', url);
+        const fetchResponse = await fetch(url);
+        console.log('🌐 Fetch response status:', fetchResponse.status);
+        
+        const responseText = await fetchResponse.text();
+        console.log('🌐 Raw response text:', responseText.substring(0, 200));
+        
+        const result = JSON.parse(responseText);
           
-          console.log('Response status:', response.status);
-          console.log('Response headers:', response.headers);
-          
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          
-          const result = await response.json();
-          console.log('Raw response from Google Sheets:', result);
-          
-          if (result.success && result.data) {
-            console.log('Loaded statistics from Google Sheets:', result.data);
+        if (result.success && result.data) {
+          console.log('✅ Google Sheets data loaded successfully');
             
-            // Chuyển đổi dữ liệu từ Google Sheets sang format localStorage
+          // Chuyển đổi dữ liệu từ Google Sheets
             const googleStats = result.data.topicStats || [];
             const googleWrongAnswers = result.data.frequentWrongAnswers || [];
             
+            // Also fetch wrong answers data for accurate counting
+            console.log('🌐 Fetching wrong answers for accurate counting...');
+            const wrongAnswersUrl = `${window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL}?action=getWrongAnswers&_t=${timestamp}`;
+            const wrongAnswersResponse = await fetch(wrongAnswersUrl);
+            const wrongAnswersText = await wrongAnswersResponse.text();
+            const wrongAnswersResult = JSON.parse(wrongAnswersText);
+            
+            if (wrongAnswersResult.success && wrongAnswersResult.data) {
+              console.log('✅ Wrong answers data loaded:', wrongAnswersResult.data.length);
+              // Use wrong answers data instead of frequentWrongAnswers
+              const allWrongAnswersFromAPI = wrongAnswersResult.data;
+              
+              // Debug: Check data for specific topic
+              const topicData = allWrongAnswersFromAPI.filter(item => 
+                item.topicName === '1. Tín dụng khách hàng doanh nghiệp'
+              );
+              console.log('🔍 Raw data for "1. Tín dụng khách hàng doanh nghiệp":', topicData.length, 'items');
+              console.log('🔍 Sample data:', topicData.slice(0, 3));
+            
             if (googleStats.length > 0) {
-              // Merge với dữ liệu localStorage (ưu tiên Google Sheets)
               allStats = googleStats.map(stat => ({
                 topicId: stat.topicId,
                 topicName: stat.topicName,
-                timestamp: new Date().toISOString(), // Dùng thời gian hiện tại
+                timestamp: new Date().toISOString(),
                 totalQuestions: stat.totalQuestions,
                 correctAnswers: stat.totalCorrect,
-                wrongAnswers: stat.totalWrong,
+                wrongAnswers: stat.totalWrong, // This is total wrong attempts from Google Sheets
                 score: stat.avgScore,
                 isExam: stat.isExam,
                 fullname: 'Google Sheets Data',
                 branch: 'Online'
               }));
-              
-              console.log('Converted Google Sheets stats:', allStats);
+              console.log('📊 Google Sheets stats loaded:', allStats.length, 'topics');
             }
             
-            if (googleWrongAnswers.length > 0) {
-              // Chuyển đổi wrong answers
-              allWrongAnswers = googleWrongAnswers.map(wrong => ({
+              // Use wrong answers data from getWrongAnswers API for accurate counting
+              allWrongAnswers = allWrongAnswersFromAPI.map(wrong => ({
                 questionIndex: 0,
                 question: wrong.question,
                 options: [wrong.optionA, wrong.optionB, wrong.optionC, wrong.optionD],
@@ -522,37 +825,120 @@
                 correctAnswer: wrong.correctAnswer,
                 userAnswer: 'Unknown',
                 explanation: '',
-                topicId: 'unknown',
+                topicId: wrong.topicId || 'unknown',
                 topicName: wrong.topicName,
                 timestamp: new Date().toISOString()
               }));
               
-              console.log('Converted Google Sheets wrong answers:', allWrongAnswers);
+            // Save to IndexedDB so "Tạo bài" button can use it
+              await window.db.addWrongAnswers(allWrongAnswers);
+              
+              // Count unique questions per topic for statistics
+              // Group by topic first, then count unique questions
+              const wrongAnswersByTopicName = {};
+              allWrongAnswers.forEach(answer => {
+                const topicName = answer.topicName;
+                if (!wrongAnswersByTopicName[topicName]) {
+                  wrongAnswersByTopicName[topicName] = [];
+                }
+                wrongAnswersByTopicName[topicName].push(answer);
+              });
+              
+              // Count unique questions for each topic using same logic as quiz creation modal
+              for (const [topicName, answers] of Object.entries(wrongAnswersByTopicName)) {
+                const uniqueQuestions = new Set();
+                answers.forEach(answer => {
+                  uniqueQuestions.add(answer.question);
+                });
+                uniqueQuestionsByTopic[topicName] = uniqueQuestions;
+                console.log(`📊 Topic "${topicName}": ${answers.length} total wrong answers, ${uniqueQuestions.size} unique questions`);
+              }
+              
+              // Also try to match topics that might have different names but same content
+              // This matches the logic used in quiz creation modal
+              const allTopicNames = Object.keys(wrongAnswersByTopicName);
+              for (const [topicName, answers] of Object.entries(wrongAnswersByTopicName)) {
+                // Try to find similar topic names (like "1. Tín dụng khách hàng doanh nghiệp" vs "1. Tín dụng khách hàng doanh nghiệp (Bài thi...)")
+                const topicNumber = topicName.match(/^(\d+)\./);
+                if (topicNumber) {
+                  const number = topicNumber[1];
+                  const similarTopics = allTopicNames.filter(name => 
+                    name.match(/^(\d+)\./) && name.match(/^(\d+)\./)[1] === number
+                  );
+                  
+                  if (similarTopics.length > 1) {
+                    // Combine all similar topics
+                    const combinedQuestions = new Set();
+                    similarTopics.forEach(similarTopic => {
+                      const similarAnswers = wrongAnswersByTopicName[similarTopic];
+                      similarAnswers.forEach(answer => {
+                        combinedQuestions.add(answer.question);
+                      });
+                    });
+                    
+                    // Update the main topic with combined count
+                    uniqueQuestionsByTopic[topicName] = combinedQuestions;
+                    console.log(`📊 Combined similar topics for "${topicName}": ${combinedQuestions.size} unique questions`);
+                  }
+                }
+              }
+              
+              console.log('📊 All wrong answers:', allWrongAnswers.length);
+              console.log('📊 Unique questions per topic:', uniqueQuestionsByTopic);
+            } else {
+              console.warn('⚠️ No wrong answers data from getWrongAnswers API');
             }
-          } else {
-            console.log('Google Sheets response not successful or no data:', result);
-          }
-        } catch (error) {
-          console.error('Error loading from Google Sheets:', error);
-          console.log('Falling back to localStorage data');
+        } else {
+          throw new Error(result.message || 'Không thể tải dữ liệu từ Google Sheets');
         }
-      } else {
-        console.log('Google Sheets not configured or disabled');
+        } catch (error) {
+        console.error('❌ Error loading Google Sheets data:', error);
+        alert('❌ Không thể tải dữ liệu thống kê từ Google Sheets!\n\n' +
+              'Lỗi: ' + error.message + '\n\n' +
+              'Vui lòng kiểm tra:\n' +
+              '• Kết nối internet\n' +
+              '• Cấu hình Google Sheets\n' +
+              '• Google Apps Script đang hoạt động');
+        return;
+      }
+      
+      // Filter out statistics from blacklisted (deleted) review topics
+      const blacklist = (await window.db.getConfig('deleted_review_topics')) || [];
+      const blacklistMap = (await window.db.getConfig('deleted_review_topics_map')) || {};
+      
+      // Get blacklisted topic names
+      const blacklistedTopicNames = new Set(Object.values(blacklistMap));
+      
+      if (blacklist.length > 0 || blacklistedTopicNames.size > 0) {
+        const beforeFilter = allStats.length;
+        allStats = allStats.filter(stat => {
+          // Filter by topicId
+          if (blacklist.includes(stat.topicId)) {
+            return false;
+          }
+          // Filter by topicName (for review topics from Google Sheets)
+          if (stat.topicName && blacklistedTopicNames.has(stat.topicName)) {
+            return false;
+          }
+          return true;
+        });
+        
+        // Also filter wrong answers
+        const beforeWrongFilter = allWrongAnswers.length;
+        allWrongAnswers = allWrongAnswers.filter(answer => {
+          if (blacklist.includes(answer.topicId)) return false;
+          if (answer.topicName && blacklistedTopicNames.has(answer.topicName)) return false;
+          return true;
+        });
       }
       
       if (allStats.length === 0) {
-        // Hiển thị thông tin về các chuyên đề có sẵn thay vì chỉ báo lỗi
-        const allTopics = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
-        const topicsCount = allTopics.filter(t => !t.isExam).length;
-        const examsCount = allTopics.filter(t => t.isExam).length;
-        
-        const message = `Chưa có dữ liệu thống kê nào!\n\n` +
-                       `Hiện tại có sẵn:\n` +
-                       `• ${topicsCount} chuyên đề ôn tập\n` +
-                       `• ${examsCount} bài thi\n\n` +
-                       `Hãy làm một số bài quiz để xem thống kê chi tiết!`;
-        
-        alert(message);
+        alert('❌ Không có dữ liệu thống kê từ Google Sheets!\n\n' +
+              'Có thể:\n' +
+              '• Chưa có ai làm bài quiz\n' +
+              '• Google Sheets chưa có dữ liệu\n' +
+              '• Cần thời gian để đồng bộ dữ liệu\n\n' +
+              'Vui lòng thử lại sau khi có dữ liệu từ Google Sheets.');
         return;
       }
       
@@ -564,7 +950,7 @@
       const totalCorrect = allStats.reduce((sum, s) => sum + s.correctAnswers, 0);
       const totalWrong = allStats.reduce((sum, s) => sum + s.wrongAnswers, 0);
       
-      // Group by topic
+      // Group by topic - Use unique questions count instead of total wrong attempts
       const topicStats = {};
       allStats.forEach(stat => {
         if (!topicStats[stat.topicId]) {
@@ -576,7 +962,7 @@
             bestScore: 0,
             totalQuestions: 0,
             totalCorrect: 0,
-            totalWrong: 0,
+            totalWrong: 0, // Will be updated with unique questions count
             isExam: stat.isExam
           };
         }
@@ -585,25 +971,97 @@
         topicStats[stat.topicId].bestScore = Math.max(topicStats[stat.topicId].bestScore, stat.score);
         topicStats[stat.topicId].totalQuestions += stat.totalQuestions;
         topicStats[stat.topicId].totalCorrect += stat.correctAnswers;
-        topicStats[stat.topicId].totalWrong += stat.wrongAnswers;
+        
+        if (stat.topicName === '4. Xử lý nợ') {
+          console.log(`📊 Google Sheets data for "4. Xử lý nợ": wrongAnswers = ${stat.wrongAnswers}`);
+        }
       });
       
-      // Calculate averages for each topic
-      Object.values(topicStats).forEach(topic => {
-        topic.avgScore = Math.round(topic.totalScore / topic.attempts);
-      });
+      // Update totalWrong with unique questions count
+      console.log('📊 uniqueQuestionsByTopic:', uniqueQuestionsByTopic);
+      console.log('📊 Object.keys(uniqueQuestionsByTopic):', Object.keys(uniqueQuestionsByTopic));
       
-      // Sort topics by average score (descending)
-      const sortedTopics = Object.values(topicStats).sort((a, b) => b.avgScore - a.avgScore);
+      for (const topicId in topicStats) {
+        const topic = topicStats[topicId];
+        console.log(`📊 Processing topic: "${topic.name}"`);
+        
+        // Try exact match first
+        let uniqueCount = 0;
+        if (uniqueQuestionsByTopic[topic.name]) {
+          uniqueCount = uniqueQuestionsByTopic[topic.name].size;
+          console.log(`📊 Exact match found: ${uniqueCount} unique questions`);
+        } else {
+          // Try partial match
+          const matchingKeys = Object.keys(uniqueQuestionsByTopic).filter(key => 
+            key.includes(topic.name) || topic.name.includes(key)
+          );
+          console.log(`📊 No exact match. Matching keys for "${topic.name}":`, matchingKeys);
+          
+          if (matchingKeys.length > 0) {
+            // Use the first matching key
+            const matchingKey = matchingKeys[0];
+            uniqueCount = uniqueQuestionsByTopic[matchingKey].size;
+            console.log(`📊 Using matching key "${matchingKey}": ${uniqueCount} unique questions`);
+          }
+        }
+        
+        topicStats[topicId].totalWrong = uniqueCount;
+        console.log(`📊 Final result for "${topic.name}": ${uniqueCount} unique wrong questions`);
+      }
       
-      // Group wrong answers by topic
+      // Group wrong answers by topic (by topicId AND topicName) BEFORE calculating averages
       const wrongAnswersByTopic = {};
+      const wrongAnswersByTopicName = {};
+      
+      
       allWrongAnswers.forEach(answer => {
+        // Group by topicId
         if (!wrongAnswersByTopic[answer.topicId]) {
           wrongAnswersByTopic[answer.topicId] = [];
         }
         wrongAnswersByTopic[answer.topicId].push(answer);
+        
+        // Also group by topicName for fallback
+        const topicName = answer.topicName || 'Unknown';
+        if (!wrongAnswersByTopicName[topicName]) {
+          wrongAnswersByTopicName[topicName] = [];
+        }
+        wrongAnswersByTopicName[topicName].push(answer);
       });
+      
+      
+      // Debug: Show detailed count for each topic name
+      for (const [topicName, answers] of Object.entries(wrongAnswersByTopicName)) {
+        // Show actual questions for "4. Xử lý nợ" to compare with Google Sheets
+        if (topicName === '4. Xử lý nợ') {
+          answers.forEach((ans, idx) => {
+          });
+        }
+      }
+      
+      // Use Google Sheets data directly - no need to recalculate
+      console.log('📊 Using Google Sheets data directly for all statistics');
+      
+      // Calculate averages for each topic AFTER updating totalWrong
+      Object.values(topicStats).forEach(topic => {
+        topic.avgScore = Math.round(topic.totalScore / topic.attempts);
+      });
+      
+      // Sort topics by average score (descending) AFTER all calculations
+      // Note: blacklist filtering already done at the top, so topicStats only contains valid topics
+      // Filter out topics with no wrong answers
+      const sortedTopics = Object.values(topicStats)
+        .filter(topic => topic.totalWrong > 0) // Only show topics with wrong answers
+        .sort((a, b) => b.avgScore - a.avgScore);
+      
+      // Debug: Log final sorted topics with their totalWrong values
+      sortedTopics.forEach(topic => {
+      });
+      
+      // Double check the specific topic causing issues
+      const problematicTopic = sortedTopics.find(t => t.name === '4. Xử lý nợ');
+      if (problematicTopic) {
+      }
       
       // Replace entire body content with full-screen statistics page
       document.body.innerHTML = `
@@ -741,13 +1199,13 @@
                         <td style="padding: 16px; text-align: center; color: #666;">${topic.attempts}</td>
                         <td style="padding: 16px; text-align: center; color: ${topic.avgScore >= 80 ? '#2e7d32' : topic.avgScore >= 60 ? '#f57c00' : '#c62828'}; font-weight: bold; font-size: 18px;">${topic.avgScore}%</td>
                         <td style="padding: 16px; text-align: center; color: #666;">${topic.bestScore}%</td>
-                        <td style="padding: 16px; text-align: center; color: #c62828; font-weight: 600;">${topic.totalWrong}</td>
+                        <td style="padding: 16px; text-align: center; color: #c62828; font-weight: 600;" title="Số câu hỏi duy nhất bị sai">${topic.totalWrong}</td>
                         <td style="padding: 12px; text-align: center;">
                           <div style="display: flex; gap: 6px; justify-content: center; flex-direction: column;">
                             <button onclick="exportTopicStatisticsExcel('${topic.topicId}')" style="background: #1976d2; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='#1565c0'" onmouseout="this.style.background='#1976d2'" title="Xuất Excel">
                               <i class="material-icons" style="font-size: 14px;">download</i> Excel
                             </button>
-                            <button onclick="createQuizFromWrongAnswers('${topic.topicId}', '${topic.name}')" style="background: #4caf50; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='#45a049'" onmouseout="this.style.background='#4caf50'" title="Tạo bài thi từ câu sai">
+                            <button onclick="event.stopPropagation(); createQuizFromWrongAnswers('${topic.topicId}', '${topic.name}')" style="background: #4caf50; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s; white-space: nowrap;" onmouseover="this.style.background='#45a049'" onmouseout="this.style.background='#4caf50'" title="Tạo bài thi từ câu sai">
                               <i class="material-icons" style="font-size: 14px;">quiz</i> Tạo bài
                             </button>
                             ${topic.name.includes('Ôn tập câu sai') ? `
@@ -799,7 +1257,7 @@
                         <div style="font-size: 18px; font-weight: 600; color: #333;">${topic.bestScore}%</div>
                       </div>
                       <div style="text-align: center; padding: 8px; background: #f8f9fa; border-radius: 8px;">
-                        <div style="font-size: 14px; color: #666; margin-bottom: 4px;">Câu sai</div>
+                        <div style="font-size: 14px; color: #666; margin-bottom: 4px;" title="Số câu hỏi duy nhất bị sai">Câu sai</div>
                         <div style="font-size: 18px; font-weight: 600; color: #c62828;">${topic.totalWrong}</div>
                       </div>
                     </div>
@@ -808,8 +1266,11 @@
                       <button onclick="exportTopicStatisticsExcel('${topic.topicId}')" style="background: #1976d2; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 120px; justify-content: center;" title="Xuất Excel">
                         <i class="material-icons" style="font-size: 16px;">download</i> Excel
                       </button>
-                      <button onclick="createQuizFromWrongAnswers('${topic.topicId}', '${topic.name}')" style="background: #4caf50; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 120px; justify-content: center;" title="Tạo bài thi từ câu sai">
+                      <button onclick="event.stopPropagation(); createQuizFromWrongAnswers('${topic.topicId}', '${topic.name}')" style="background: #4caf50; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 120px; justify-content: center;" title="Tạo bài thi từ câu sai">
                         <i class="material-icons" style="font-size: 16px;">quiz</i> Tạo bài
+                      </button>
+                      <button onclick="debugWrongAnswersSystem()" style="background: #ff9800; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 120px; justify-content: center;" title="Debug hệ thống câu sai">
+                        <i class="material-icons" style="font-size: 16px;">bug_report</i> Debug
                       </button>
                       ${topic.name.includes('Ôn tập câu sai') ? `
                       <button onclick="deleteReviewTopic('${topic.topicId}', '${topic.name}')" style="background: #f44336; color: white; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 120px; justify-content: center;" title="Xóa chuyên đề ôn tập">
@@ -858,11 +1319,20 @@
         initializeResponsiveView();
       }, 100);
     }
+    
+    // ✅ Expose showGlobalStatistics to window immediately after definition
+    window.showGlobalStatistics = showGlobalStatistics;
 
     // Function to load online leaderboard data from Google Sheets
     async function loadOnlineLeaderboard() {
       const leaderboardContainer = document.getElementById('online-leaderboard');
       if (!leaderboardContainer) return;
+      
+      // Show the online leaderboard section first (in case it was hidden)
+      const onlineLeaderboardSection = leaderboardContainer.closest('.online-leaderboard-section');
+      if (onlineLeaderboardSection) {
+        onlineLeaderboardSection.style.display = 'block';
+      }
       
       // Show loading state
       leaderboardContainer.innerHTML = `
@@ -881,6 +1351,15 @@
         
         // Fetch data from Google Sheets
         const response = await fetch(`${window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL}?action=getLeaderboard`);
+        
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          console.error('❌ Google Sheets returned non-JSON for leaderboard:', text);
+          throw new Error('Google Sheets trả về dữ liệu không đúng định dạng JSON');
+        }
+        
         const result = await response.json();
         
         if (!result.success) {
@@ -893,7 +1372,7 @@
         displayOnlineLeaderboard(data, leaderboardContainer);
         
       } catch (error) {
-        console.error('Error loading online leaderboard:', error);
+        console.error('❌ Error loading online leaderboard:', error);
         
         // Hide the entire online leaderboard section if can't connect
         const onlineLeaderboardSection = leaderboardContainer.closest('.online-leaderboard-section');
@@ -970,7 +1449,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  ${leaderboard.slice(0, 20).map((user, index) => `
+                  ${leaderboard.slice(0, 10).map((user, index) => `
                     <tr style="border-bottom: 1px solid #e0e0e0; ${index < 3 ? 'background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);' : ''}">
                       <td style="padding: 12px; text-align: center; font-weight: 600;">
                         ${index < 3 ? ['🥇', '🥈', '🥉'][index] : `#${user.rank}`}
@@ -995,7 +1474,7 @@
           
           <!-- Mobile Card View -->
           <div class="mobile-leaderboard" style="display: none;">
-            ${leaderboard.slice(0, 20).map((user, index) => `
+            ${leaderboard.slice(0, 10).map((user, index) => `
               <div style="background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); ${index < 3 ? 'border: 2px solid #ffc107; background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%);' : ''}">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                   <div style="display: flex; align-items: center; gap: 12px;">
@@ -1081,23 +1560,74 @@
       // Update on resize
       window.addEventListener('resize', updateView);
     }
+    
+    // ✅ Expose functions to window for onclick handlers
+    window.loadOnlineLeaderboard = loadOnlineLeaderboard;
+    window.displayOnlineLeaderboard = displayOnlineLeaderboard;
+    window.initializeResponsiveView = initializeResponsiveView;
 
-        function renderLists(all) {
-          const exams = all.filter(t => t && (t.isExam === true || (typeof t.durationMinutes === 'number' && t.durationMinutes > 0)));
-          const topics = all.filter(t => !(t && (t.isExam === true || (typeof t.durationMinutes === 'number' && t.durationMinutes > 0))));
+        async function renderLists(all) {
+          // Filter out deleted review topics
+          const blacklist = (await window.db.getConfig('deleted_review_topics')) || [];
+          const filtered = all.filter(t => !blacklist.includes(t.id));
+          
+          const exams = filtered.filter(t => t && (t.isExam === true || (typeof t.durationMinutes === 'number' && t.durationMinutes > 0)));
+          const topics = filtered.filter(t => !(t && (t.isExam === true || (typeof t.durationMinutes === 'number' && t.durationMinutes > 0))));
+
+          // Sort topics by name (extract number prefix for proper ordering)
+          const sortTopics = (items) => {
+            const getNumber = (name) => {
+              const match = name && name.match(/^(\d+)\./);
+              return match ? parseInt(match[1], 10) : Number.POSITIVE_INFINITY;
+            };
+            return items.sort((a, b) => {
+              const numA = getNumber(a?.name || '');
+              const numB = getNumber(b?.name || '');
+              if (numA !== numB) return numA - numB;
+              return (a?.name || '').localeCompare(b?.name || '', 'vi');
+            });
+          };
+
+          // Dedicated sort for exams: number prefix, then exam type priority, then name
+          const sortExams = (items) => {
+            const getNumber = (name) => {
+              const match = name && name.match(/^(\d+)\./);
+              return match ? parseInt(match[1], 10) : Number.POSITIVE_INFINITY;
+            };
+            const getExamPriority = (name) => {
+              const n = (name || '').toLowerCase();
+              // ưu tiên chức danh chức vụ trước, sau đó lao động CMNV, còn lại cuối
+              if (n.includes('chức danh chức vụ')) return 0;
+              if (n.includes('lao động chuyên môn nghiệp vụ')) return 1;
+              return 2;
+            };
+            return items.sort((a, b) => {
+              const numA = getNumber(a?.name || '');
+              const numB = getNumber(b?.name || '');
+              if (numA !== numB) return numA - numB;
+              const prA = getExamPriority(a?.name);
+              const prB = getExamPriority(b?.name);
+              if (prA !== prB) return prA - prB;
+              return (a?.name || '').localeCompare(b?.name || '', 'vi');
+            });
+          };
+
+          // Sort both topics and exams
+          const sortedTopics = sortTopics([...topics]);
+          const sortedExams = sortExams([...exams]);
 
           // Populate topic dropdown
-          if (topics.length > 0) {
+          if (sortedTopics.length > 0) {
             topicSelect.innerHTML = '<option value="">-- Chọn chuyên đề --</option>' + 
-              topics.map(topic => `<option value="${topic.id}">${topic.name} (${topic.questions ? topic.questions.length : 0} câu)</option>`).join('');
+              sortedTopics.map(topic => `<option value="${topic.id}">${topic.name} (${topic.questions ? topic.questions.length : 0} câu)</option>`).join('');
           } else {
             topicSelect.innerHTML = '<option value="">-- Chưa có chuyên đề --</option>';
           }
 
           // Populate exam dropdown
-          if (exams.length > 0) {
+          if (sortedExams.length > 0) {
             examSelect.innerHTML = '<option value="">-- Chọn bài thi --</option>' + 
-              exams.map(exam => {
+              sortedExams.map(exam => {
                 const total = exam.examConfig?.total ?? (exam.questions ? exam.questions.length : 0);
                 const duration = exam.durationMinutes ? (exam.durationMinutes + ' phút') : 'N/A';
                 return `<option value="${exam.id}">${exam.name} (${total} câu, ${duration})</option>`;
@@ -1109,7 +1639,7 @@
           // Populate topic grid
           const topicsContainer = document.getElementById('topics-container');
           if (topicsContainer) {
-            topicsContainer.innerHTML = topics.length ? topics.map(topic => `
+            topicsContainer.innerHTML = sortedTopics.length ? sortedTopics.map(topic => `
               <div class="topic-card">
                 <div class="topic-card-content">
                   <h3>${topic.name}</h3>
@@ -1139,7 +1669,7 @@
           // Populate exam grid
           const examsContainer = document.getElementById('exams-container');
           if (examsContainer) {
-            examsContainer.innerHTML = exams.length ? exams.map(exam => `
+            examsContainer.innerHTML = sortedExams.length ? sortedExams.map(exam => `
               <div class="topic-card">
                 <div class="topic-card-content">
                   <h3>${exam.name}</h3>
@@ -1167,8 +1697,8 @@
           }
 
           // Store data for later use
-          window.allTopics = topics;
-          window.allExams = exams;
+          window.allTopics = sortedTopics;
+          window.allExams = sortedExams;
         }
 
         // View toggle functions
@@ -1315,24 +1845,75 @@
         });
 
         async function loadTopics() {
-          console.log('Loading topics...');
           showLoadingState();
           
-          // Try to load from localStorage first
+          // Check if localStorage is causing issues
           try {
-            const localTopicsStr = localStorage.getItem('quiz_topics');
-            if (localTopicsStr) {
-              const localTopics = JSON.parse(localTopicsStr);
-              if (Array.isArray(localTopics) && localTopics.length > 0) {
-                console.log('Loaded topics from localStorage:', localTopics.length);
+            const testKey = 'storage_test';
+            localStorage.setItem(testKey, 'test');
+            localStorage.removeItem(testKey);
+          } catch (quotaError) {
+            // localStorage is full, offer to clear it
+            if (quotaError.name === 'QuotaExceededError') {
+              const shouldClear = confirm(
+                '⚠️ Bộ nhớ LocalStorage đã đầy!\n\n' +
+                'Hệ thống đã chuyển sang IndexedDB (không giới hạn dung lượng).\n\n' +
+                'Bạn có muốn xóa dữ liệu cũ trong LocalStorage không?\n' +
+                '(Dữ liệu quiz của bạn sẽ được giữ nguyên trong IndexedDB)'
+              );
+              
+              if (shouldClear) {
+                try {
+                  // Clear localStorage except critical keys
+                  const keysToKeep = ['admin_credentials', 'admin_authenticated', 'deleted_review_topics', 'deleted_review_topics_map'];
+                  for (let i = localStorage.length - 1; i >= 0; i--) {
+                    const key = localStorage.key(i);
+                    if (key && !keysToKeep.includes(key)) {
+                      localStorage.removeItem(key);
+                    }
+                  }
+                  alert('✅ Đã xóa dữ liệu cũ thành công!\n\nVui lòng F5 để tải lại trang.');
+                  return;
+                } catch (e) {
+                  console.error('Error clearing localStorage:', e);
+                }
+              }
+            }
+          }
+          
+          // Wait for IndexedDB to be ready
+          if (window.db && window.db.ready) {
+            try {
+              await window.db.ready;
+            } catch (e) {
+              console.error('Error waiting for IndexedDB:', e);
+            }
+          }
+          
+          // Try to load from IndexedDB first
+          try {
+            if (window.db) {
+              // Try to get from quiz_topics store first
+              const localTopics = await window.db.getTopics();
+              if (localTopics && localTopics.length > 0) {
                 hideLoadingState();
-                renderLists(localTopics);
+                await renderLists(localTopics);
                 return;
+              }
+              
+              // Fallback to config store for backward compatibility
+              const localTopicsStr = await window.db.getConfig('quiz_topics');
+              if (localTopicsStr) {
+                const localTopics = JSON.parse(localTopicsStr);
+                if (Array.isArray(localTopics) && localTopics.length > 0) {
+                  hideLoadingState();
+                  await renderLists(localTopics);
+                  return;
+                }
               }
             }
           } catch (e) {
-            console.warn('Error loading from localStorage:', e);
-            localStorage.removeItem('quiz_topics'); // Clear corrupted data
+            console.error('Error loading from IndexedDB:', e);
           }
           
           // Try to load from remote with multiple fallback strategies
@@ -1345,7 +1926,6 @@
           
           for (const urlString of urls) {
             try {
-              console.log('Trying to load from:', urlString);
               const url = new URL(urlString, location.href);
               url.searchParams.set('v', Date.now());
               
@@ -1356,11 +1936,9 @@
                 }
               });
               
-              console.log('Fetch response status:', resp.status, 'for URL:', urlString);
               
               if (resp.ok) {
                 const remoteTopics = await resp.json();
-                console.log('Remote topics loaded:', remoteTopics);
                 
                 if (Array.isArray(remoteTopics) && remoteTopics.length > 0) {
                   // Validate topic structure
@@ -1372,30 +1950,28 @@
                   );
                   
                   if (validTopics.length > 0) {
-                    if (!safeLocalStorageSet('quiz_topics', JSON.stringify(validTopics))) {
-                      console.warn('Could not save to localStorage due to quota exceeded');
-                    } else {
-                      console.log('Valid topics saved to localStorage:', validTopics.length);
+                    // Save to IndexedDB instead of localStorage
+                    try {
+                      if (window.db) {
+                        await window.db.setConfig('quiz_topics', JSON.stringify(validTopics));
+                      }
+                    } catch (e) {
+                      console.error('Error saving to IndexedDB:', e);
                     }
                     hideLoadingState();
-                    renderLists(validTopics);
+                    await renderLists(validTopics);
                     return;
                   } else {
-                    console.warn('No valid topics found in remote data');
                   }
                 } else {
-                  console.warn('Remote topics is not a valid array or is empty');
                 }
               } else {
-                console.error('Failed to fetch from', urlString, ':', resp.status, resp.statusText);
               }
             } catch(e) {
-              console.error('Error loading from', urlString, ':', e);
             }
           }
           
           // Show empty state if all methods fail
-          console.log('All loading methods failed, showing empty state');
           hideLoadingState();
           showEmptyState();
         }
@@ -1405,8 +1981,8 @@
 
 
       // Delete all review topics (created from wrong answers)
-      window.deleteAllReviewTopics = function() {
-        const allTopics = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
+      window.deleteAllReviewTopics = async function() {
+        const allTopics = await getTopicsFromStorage();
         const reviewTopics = allTopics.filter(topic => topic.name.includes('Ôn tập câu sai'));
         
         if (reviewTopics.length === 0) {
@@ -1423,19 +1999,32 @@
           
           // Remove all review topics
           const updatedTopics = allTopics.filter(topic => !topic.name.includes('Ôn tập câu sai'));
-          localStorage.setItem('quiz_topics', JSON.stringify(updatedTopics));
           
-          // Remove related statistics
-          const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
-          const updatedStats = allStats.filter(stat => !reviewTopicIds.includes(stat.topicId));
-          localStorage.setItem('quiz_statistics', JSON.stringify(updatedStats));
+          // Save to IndexedDB
+          if (window.db) {
+            await window.db.setConfig('quiz_topics', JSON.stringify(updatedTopics));
+          }
           
-          // Remove related wrong answers
-          const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
-          const updatedWrongAnswers = allWrongAnswers.filter(answer => !reviewTopicIds.includes(answer.topicId));
-          localStorage.setItem('wrong_answers', JSON.stringify(updatedWrongAnswers));
+          // Add all to blacklist
+          const blacklist = (await window.db.getConfig('deleted_review_topics')) || [];
+          const blacklistMap = (await window.db.getConfig('deleted_review_topics_map')) || {};
           
-          alert(`Đã xóa thành công ${reviewTopics.length} chuyên đề ôn tập!`);
+          reviewTopics.forEach(topic => {
+            if (!blacklist.includes(topic.id)) {
+              blacklist.push(topic.id);
+              blacklistMap[topic.id] = topic.name;
+            }
+          });
+          await window.db.setConfig('deleted_review_topics', blacklist);
+          await window.db.setConfig('deleted_review_topics_map', blacklistMap);
+          
+          // Remove related statistics (not needed - IndexedDB keeps data)
+          // Statistics will be filtered when reading based on blacklist
+          
+          // Remove related wrong answers (not needed - IndexedDB keeps data)
+          // Wrong answers will be filtered when reading based on blacklist
+          
+          alert(`✅ Đã xóa thành công ${reviewTopics.length} chuyên đề ôn tập!`);
           
           // Refresh the global statistics display
           // Restore original body content and show statistics again
@@ -1449,58 +2038,204 @@
           }
           
         } catch (error) {
-          console.error('Error deleting all review topics:', error);
           alert('Có lỗi xảy ra khi xóa chuyên đề. Vui lòng thử lại.');
         }
       };
 
       // Delete review topic (created from wrong answers)
-      window.deleteReviewTopic = function(topicId, topicName) {
+      window.deleteReviewTopic = async function(topicId, topicName) {
         if (!confirm(`Bạn có chắc chắn muốn xóa chuyên đề "${topicName}"?\n\nHành động này sẽ xóa:\n- Chuyên đề ôn tập\n- Tất cả thống kê liên quan\n- Không thể hoàn tác`)) {
           return;
         }
         
         try {
+          
           // Get all topics
-          const allTopics = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
+          const allTopics = await getTopicsFromStorage();
           
           // Remove the topic
           const updatedTopics = allTopics.filter(topic => topic.id !== topicId);
-          localStorage.setItem('quiz_topics', JSON.stringify(updatedTopics));
           
-          // Remove related statistics
-          const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
-          const updatedStats = allStats.filter(stat => stat.topicId !== topicId);
-          localStorage.setItem('quiz_statistics', JSON.stringify(updatedStats));
+          // Save to IndexedDB
+          if (window.db) {
+            await window.db.setConfig('quiz_topics', JSON.stringify(updatedTopics));
+          }
           
-          // Remove related wrong answers
-          const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
-          const updatedWrongAnswers = allWrongAnswers.filter(answer => answer.topicId !== topicId);
-          localStorage.setItem('wrong_answers', JSON.stringify(updatedWrongAnswers));
+          // Add to blacklist to prevent recreation (store both ID and name)
+          const blacklist = (await window.db.getConfig('deleted_review_topics')) || [];
+          const blacklistMap = (await window.db.getConfig('deleted_review_topics_map')) || {};
           
-          alert('Đã xóa chuyên đề ôn tập thành công!');
+          if (!blacklist.includes(topicId)) {
+            blacklist.push(topicId);
+            blacklistMap[topicId] = topicName; // Store topicName for filtering by name
+            await window.db.setConfig('deleted_review_topics', blacklist);
+            await window.db.setConfig('deleted_review_topics_map', blacklistMap);
+          }
           
-          // Reload the page to refresh the topics/exams list
+          // Remove related statistics (not needed - IndexedDB keeps data)
+          // Statistics will be filtered when reading based on blacklist
+          
+          // Remove related wrong answers (not needed - IndexedDB keeps data)
+          // Wrong answers will be filtered when reading based on blacklist
+          
+          alert('✅ Đã xóa chuyên đề ôn tập thành công!');
+          
+          // Refresh the statistics modal to show updated data
+          // Don't close modal, just refresh content
+          if (typeof window.showGlobalStatistics === 'function') {
+            window.showGlobalStatistics();
+          } else if (typeof showGlobalStatistics === 'function') {
+            showGlobalStatistics();
+          } else {
+            // Fallback: reload page
           window.location.reload();
+          }
           
         } catch (error) {
-          console.error('Error deleting review topic:', error);
-          alert('Có lỗi xảy ra khi xóa chuyên đề. Vui lòng thử lại.');
+          alert('❌ Có lỗi xảy ra khi xóa chuyên đề. Vui lòng thử lại.');
         }
       };
 
-      // Create quiz from wrong answers
-      window.createQuizFromWrongAnswers = function(topicId, topicName) {
+      // Create quiz from wrong answers - Priority Google Sheets
+      window.createQuizFromWrongAnswers = async function(topicId, topicName) {
+        try {
+          console.log('🎯 Creating quiz from wrong answers:', { topicId, topicName });
+          
+          // Priority 1: Try Google Sheets first
+          if (window.QUIZ_CONFIG && window.QUIZ_CONFIG.ENABLE_CLOUD_SYNC && window.isConfigured()) {
+            console.log('🌐 Trying Google Sheets first...');
+            try {
+          await createQuizFromCloudWrongAnswers(topicId, topicName);
+              return; // Success, exit
+            } catch (cloudError) {
+              console.warn('⚠️ Google Sheets failed, falling back to local:', cloudError.message);
+              // Continue to local fallback
+            }
+          }
+          
+          // Priority 2: Use IndexedDB if available
+          if (window.db && window.db.getWrongAnswers) {
+            console.log('💾 Using IndexedDB...');
+            await createQuizFromLocalWrongAnswers(topicId, topicName);
+            return;
+          }
+          
+          // Priority 3: Fallback to localStorage
+          console.log('📦 Using localStorage fallback...');
+          createQuizFromWrongAnswersLocalStorage(topicId, topicName);
+          
+        } catch (error) {
+          console.error('❌ Error in createQuizFromWrongAnswers:', error);
+          alert('❌ Có lỗi xảy ra khi tạo bài thi từ câu sai:\n\n' + error.message + '\n\nVui lòng thử lại hoặc liên hệ quản trị viên.');
+        }
+      };
+      
+      // Fallback function using localStorage (like backup version)
+      function createQuizFromWrongAnswersLocalStorage(topicId, topicName) {
         const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
         const allTopics = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
         
         // Sử dụng số lần sai tối thiểu cố định
         const minWrongCount = 1;
         
-        const topicWrongAnswers = allWrongAnswers.filter(answer => answer.topicId === topicId);
+        // Debug: Log thông tin
+        console.log('Creating quiz from wrong answers (localStorage):');
+        console.log('Topic ID:', topicId);
+        console.log('Topic Name:', topicName);
+        console.log('Total wrong answers in storage:', allWrongAnswers.length);
+        
+        // Debug: Show all available topic names
+        const availableTopicNames = [...new Set(allWrongAnswers.map(a => a.topicName))];
+        console.log('Available topic names in wrong_answers:', availableTopicNames);
+        console.log('Searching for topicName:', JSON.stringify(topicName));
+        
+        // TRY 1: Lọc theo topicName TRƯỚC (vì topicId có thể là 'unknown')
+        let topicWrongAnswers = allWrongAnswers.filter(answer => answer.topicName === topicName);
+        console.log(`Found ${topicWrongAnswers.length} answers by topicName (exact match)`);
+        
+        // TRY 1.5: If exact match failed, try trimmed match
+        if (topicWrongAnswers.length === 0) {
+          console.log('Trying with trimmed topicName...');
+          topicWrongAnswers = allWrongAnswers.filter(answer => 
+            answer.topicName && answer.topicName.trim() === topicName.trim()
+          );
+          console.log(`Found ${topicWrongAnswers.length} answers by topicName (trimmed)`);
+        }
+        
+        // TRY 2: Nếu không tìm thấy theo topicName, thử theo topicId
+        if (topicWrongAnswers.length === 0 && topicId !== 'unknown') {
+          console.log('No answers found with topicName, trying by topicId...');
+          topicWrongAnswers = allWrongAnswers.filter(answer => answer.topicId === topicId);
+          console.log(`Found ${topicWrongAnswers.length} answers by topicId`);
+        }
+        
+        // TRY 3: Nếu vẫn không tìm thấy, thử tìm theo số thứ tự chính xác
+        if (topicWrongAnswers.length === 0) {
+          console.log('No answers found with exact topicName, trying number prefix match...');
+          const topicNumber = topicName.match(/^(\d+)\./);
+          if (topicNumber) {
+            const number = topicNumber[1];
+            topicWrongAnswers = allWrongAnswers.filter(answer => {
+              if (!answer.topicName) return false;
+              const answerNumber = answer.topicName.match(/^(\d+)\./);
+              return answerNumber && answerNumber[1] === number;
+            });
+            console.log('Trying to match by number prefix:', number, 'Found:', topicWrongAnswers.length);
+          }
+        }
+        
+        // Nếu vẫn không tìm thấy, cho phép người dùng chọn từ danh sách
+        if (topicWrongAnswers.length === 0) {
+          const uniqueTopics = {};
+          allWrongAnswers.forEach(answer => {
+            const key = answer.topicName || 'Không rõ tên';
+            if (!uniqueTopics[key]) {
+              uniqueTopics[key] = {
+                name: answer.topicName,
+                id: answer.topicId,
+                count: 0
+              };
+            }
+            uniqueTopics[key].count++;
+          });
+          
+          const topicList = Object.values(uniqueTopics);
+          console.log('Available topics with wrong answers:', topicList);
+          
+          // Nếu chỉ có 1 chuyên đề có câu sai, tự động chọn nó
+          if (topicList.length === 1) {
+            const autoTopic = topicList[0];
+            if (confirm(`Không tìm thấy câu sai cho "${topicName}"\n\nNhưng có ${autoTopic.count} câu sai cho "${autoTopic.name}"\n\nBạn có muốn tạo bài thi từ chuyên đề này không?`)) {
+              topicWrongAnswers = allWrongAnswers.filter(answer => answer.topicName === autoTopic.name);
+              topicName = autoTopic.name; // Cập nhật tên chuyên đề
+            } else {
+              return;
+            }
+          } else {
+            // Nhiều chuyên đề, hiển thị danh sách để người dùng chọn
+            const message = `Không tìm thấy câu sai cho "${topicName}"\n\nCác chuyên đề có câu sai:\n\n` +
+              topicList.map((t, i) => `${i + 1}. ${t.name} (${t.count} câu sai)`).join('\n') +
+              `\n\nNhập số thứ tự chuyên đề bạn muốn tạo bài thi (hoặc bỏ qua):`;
+            
+            const choice = prompt(message);
+            if (!choice) return;
+            
+            const index = parseInt(choice) - 1;
+            if (index >= 0 && index < topicList.length) {
+              const selectedTopic = topicList[index];
+              topicWrongAnswers = allWrongAnswers.filter(answer => answer.topicName === selectedTopic.name);
+              topicName = selectedTopic.name; // Cập nhật tên chuyên đề
+            } else {
+              alert('Lựa chọn không hợp lệ!');
+              return;
+            }
+          }
+        }
+        
+        console.log('Final filtered wrong answers:', topicWrongAnswers.length);
         
         if (topicWrongAnswers.length === 0) {
-          alert('Chưa có câu sai nào cho chuyên đề này!');
+          alert('Không thể tìm thấy câu sai nào!');
           return;
         }
         
@@ -1564,20 +2299,1392 @@
           createdAt: new Date().toISOString()
         };
         
-        const topics = allTopics;
+        // Remove old review topics for the same source topic before adding new one
+        const blacklist = JSON.parse(localStorage.getItem('deleted_review_topics') || '[]');
+        const blacklistMap = JSON.parse(localStorage.getItem('deleted_review_topics_map') || '{}');
+        
+        const topics = allTopics.filter(t => {
+          // Keep if: not a review topic, OR not from same source, OR not in blacklist
+          if (!t.createdFrom || t.createdFrom !== 'wrong_answers') return true; // Keep non-review topics
+          if (t.sourceTopicId !== topicId) return true; // Keep review topics from other sources
+          // Remove old review topics from the same source
+          console.log('🗑️ Removing old review topic:', t.id, t.name);
+          return false;
+        });
+        
         topics.push(newTopic);
         localStorage.setItem('quiz_topics', JSON.stringify(topics));
+        
+        // Also remove from blacklist if it was there (user is creating a new one)
+        const updatedBlacklist = blacklist.filter(id => {
+          const shouldKeep = !id.startsWith('wrong_answers_quiz_');
+          if (!shouldKeep) {
+            console.log('🧹 Removing from blacklist:', id);
+            delete blacklistMap[id]; // Also remove from map
+          }
+          return shouldKeep;
+        });
+        if (updatedBlacklist.length !== blacklist.length) {
+          localStorage.setItem('deleted_review_topics', JSON.stringify(updatedBlacklist));
+          localStorage.setItem('deleted_review_topics_map', JSON.stringify(blacklistMap));
+          console.log('✅ Updated blacklist. Before:', blacklist.length, 'After:', updatedBlacklist.length);
+        }
+        
+        // Verify it was saved
+        const verify = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
+        const found = verify.find(t => t.id === newTopicId);
         
         if (confirm('Đã tạo bài thi "' + newTopic.name + '"!\n\nBạn có muốn làm bài ngay không?')) {
           window.location.href = 'quiz.html?topic=' + newTopicId;
         } else {
           window.location.reload();
         }
+      }
+      
+      // Create quiz from LOCAL wrong answers
+      async function createQuizFromLocalWrongAnswers(topicId, topicName) {
+        try {
+          console.log('🎯 Creating quiz from LOCAL wrong answers:', { topicId, topicName });
+          
+          const allWrongAnswers = await window.db.getWrongAnswers();
+          const allTopics = await getTopicsFromStorage();
+          
+          console.log('📊 Local data loaded:', {
+            wrongAnswersCount: allWrongAnswers.length,
+            topicsCount: allTopics.length
+          });
+        
+        // Sử dụng số lần sai tối thiểu cố định
+        const minWrongCount = 1;
+        
+        // Debug: Log thông tin
+        
+        // Debug: Show all available topic names
+        const availableTopicNames = [...new Set(allWrongAnswers.map(a => a.topicName))];
+        console.log('🔍 Available topic names:', availableTopicNames);
+        console.log('🎯 Looking for topic:', topicName);
+        
+        // TRY 1: Lọc theo topicName TRƯỚC (vì topicId có thể là 'unknown')
+        let topicWrongAnswers = allWrongAnswers.filter(answer => answer.topicName === topicName);
+        console.log('🔍 TRY 1 - Exact match results:', topicWrongAnswers.length);
+        
+        // TRY 1.5: If exact match failed, try trimmed match
+        if (topicWrongAnswers.length === 0) {
+          topicWrongAnswers = allWrongAnswers.filter(answer => 
+            answer.topicName && answer.topicName.trim() === topicName.trim()
+          );
+          console.log('🔍 TRY 1.5 - Trimmed match results:', topicWrongAnswers.length);
+        }
+        
+        // TRY 2: Nếu không tìm thấy theo topicName, thử theo topicId
+        if (topicWrongAnswers.length === 0 && topicId !== 'unknown') {
+          topicWrongAnswers = allWrongAnswers.filter(answer => answer.topicId === topicId);
+          console.log('🔍 TRY 2 - TopicId match results:', topicWrongAnswers.length);
+        }
+        
+        // TRY 3: Nếu vẫn không tìm thấy, thử tìm theo số thứ tự chính xác
+        // IMPORTANT: "4." should NOT match "14."
+        if (topicWrongAnswers.length === 0) {
+          const topicNumber = topicName.match(/^(\d+)\./);
+          if (topicNumber) {
+            const number = topicNumber[1];
+            topicWrongAnswers = allWrongAnswers.filter(answer => {
+              if (!answer.topicName) return false;
+              const answerNumber = answer.topicName.match(/^(\d+)\./);
+              return answerNumber && answerNumber[1] === number;
+            });
+            console.log('🔍 TRY 3 - Number match results:', topicWrongAnswers.length);
+          }
+        }
+        
+        // Nếu vẫn không tìm thấy, cho phép người dùng chọn từ danh sách
+        if (topicWrongAnswers.length === 0) {
+          console.log('❌ No wrong answers found for topic:', topicName);
+          console.log('🔍 Final result: 0 wrong answers found');
+          const uniqueTopics = {};
+          allWrongAnswers.forEach(answer => {
+            const key = answer.topicName || 'Không rõ tên';
+            if (!uniqueTopics[key]) {
+              uniqueTopics[key] = {
+                name: answer.topicName,
+                id: answer.topicId,
+                count: 0
+              };
+            }
+            uniqueTopics[key].count++;
+          });
+          
+          const topicList = Object.values(uniqueTopics);
+          
+          // Nếu chỉ có 1 chuyên đề có câu sai, tự động chọn nó
+          if (topicList.length === 1) {
+            const autoTopic = topicList[0];
+            if (confirm(`Không tìm thấy câu sai cho "${topicName}"\n\nNhưng có ${autoTopic.count} câu sai cho "${autoTopic.name}"\n\nBạn có muốn tạo bài thi từ chuyên đề này không?`)) {
+              topicWrongAnswers = allWrongAnswers.filter(answer => answer.topicName === autoTopic.name);
+              topicName = autoTopic.name; // Cập nhật tên chuyên đề
+            } else {
+              return;
+            }
+          } else {
+            // Nhiều chuyên đề, hiển thị danh sách để người dùng chọn
+            const message = `Không tìm thấy câu sai cho "${topicName}"\n\nCác chuyên đề có câu sai:\n\n` +
+              topicList.map((t, i) => `${i + 1}. ${t.name} (${t.count} câu sai)`).join('\n') +
+              `\n\nNhập số thứ tự chuyên đề bạn muốn tạo bài thi (hoặc bỏ qua):`;
+            
+            const choice = prompt(message);
+            if (!choice) return;
+            
+            const index = parseInt(choice) - 1;
+            if (index >= 0 && index < topicList.length) {
+              const selectedTopic = topicList[index];
+              topicWrongAnswers = allWrongAnswers.filter(answer => answer.topicName === selectedTopic.name);
+              topicName = selectedTopic.name; // Cập nhật tên chuyên đề
+            } else {
+              alert('Lựa chọn không hợp lệ!');
+              return;
+            }
+          }
+        }
+        
+        
+        if (topicWrongAnswers.length === 0) {
+          console.log('❌ Final check: No wrong answers found, showing alert');
+          alert('Không thể tìm thấy câu sai nào!');
+          return;
+        }
+        
+        console.log('✅ Found wrong answers:', topicWrongAnswers.length);
+        
+        // Đếm tần suất sai của mỗi câu
+        const questionFrequency = {};
+        topicWrongAnswers.forEach(answer => {
+          const key = answer.question;
+          if (!questionFrequency[key]) {
+            questionFrequency[key] = {
+              question: answer.question,
+              options: answer.options,
+              optionLabels: answer.optionLabels,
+              correctAnswer: answer.correctAnswer,
+              explanation: answer.explanation,
+              count: 0
+            };
+          }
+          questionFrequency[key].count++;
+        });
+        
+        // Lọc theo số lần sai và sắp xếp
+        const availableQuestions = Object.values(questionFrequency)
+          .filter(q => q.count >= minWrongCount)
+          .sort((a, b) => b.count - a.count);
+        
+        if (availableQuestions.length === 0) {
+          alert('Không có câu nào bị sai để tạo bài thi!');
+          return;
+        }
+        
+        // Hỏi số câu hỏi muốn tạo
+        const maxAvailable = availableQuestions.length;
+        const numQuestions = prompt(
+          'Có ' + maxAvailable + ' câu bị sai\n\n' +
+          'Bạn muốn tạo bài thi với bao nhiêu câu?',
+          Math.min(20, maxAvailable)
+        );
+        
+        if (!numQuestions || numQuestions <= 0) {
+          return; // Hủy
+        }
+        
+        const questionCount = Math.min(parseInt(numQuestions), maxAvailable);
+        const selectedQuestions = availableQuestions.slice(0, questionCount);
+        
+        const newTopicId = 'wrong_answers_quiz_' + Date.now();
+        const newTopic = {
+          id: newTopicId,
+          name: 'Ôn tập câu sai - ' + topicName + ' (' + questionCount + ' câu)',
+          questions: selectedQuestions.map(q => ({
+            question: q.question,
+            options: q.options,
+            optionLabels: q.optionLabels,
+            answer: q.correctAnswer,
+            explain: q.explanation || ''
+          })),
+          isExam: false,
+          createdFrom: 'wrong_answers',
+          sourceTopicId: topicId,
+          minWrongCount: minWrongCount,
+          createdAt: new Date().toISOString()
+        };
+        
+        // Remove old review topics for the same source topic before adding new one
+        const blacklist = (await window.db.getConfig('deleted_review_topics')) || [];
+        const blacklistMap = (await window.db.getConfig('deleted_review_topics_map')) || {};
+        
+        const topics = allTopics.filter(t => {
+          // Keep if: not a review topic, OR not from same source, OR not in blacklist
+          if (!t.createdFrom || t.createdFrom !== 'wrong_answers') return true; // Keep non-review topics
+          if (t.sourceTopicId !== topicId) return true; // Keep review topics from other sources
+          // Remove old review topics from the same source
+          return false;
+        });
+        
+        topics.push(newTopic);
+        
+        // Save to IndexedDB
+        if (window.db) {
+          await window.db.saveTopics(topics);
+        }
+        
+        // Also remove from blacklist if it was there (user is creating a new one)
+        // Remove any IDs that match the pattern for this source topic
+        const updatedBlacklist = blacklist.filter(id => {
+          const shouldKeep = !id.startsWith('wrong_answers_quiz_');
+          if (!shouldKeep) {
+            delete blacklistMap[id]; // Also remove from map
+          }
+          return shouldKeep;
+        });        
+        if (updatedBlacklist.length !== blacklist.length) {
+          await window.db.setConfig('deleted_review_topics', updatedBlacklist);
+          await window.db.setConfig('deleted_review_topics_map', blacklistMap);
+        }
+        
+        
+        // Verify it was saved
+        const verify = await getTopicsFromStorage();
+        const found = verify.find(t => t.id === newTopicId);
+        
+        if (confirm('Đã tạo bài thi "' + newTopic.name + '"!\n\nBạn có muốn làm bài ngay không?')) {
+          window.location.href = 'quiz.html?topic=' + newTopicId;
+        } else {
+          window.location.reload();
+        }
+        
+        } catch (error) {
+          console.error('❌ Error in createQuizFromLocalWrongAnswers:', error);
+          console.error('❌ Error stack:', error.stack);
+          alert('❌ Có lỗi xảy ra khi tạo bài thi từ câu sai local:\n\n' + error.message + '\n\nVui lòng thử lại hoặc liên hệ quản trị viên.');
+        }
+      }
+      
+      // Create quiz from CLOUD wrong answers (all users from Google Sheets)
+      async function createQuizFromCloudWrongAnswers(topicId, topicName) {
+        console.log('🌐 Starting createQuizFromCloudWrongAnswers:', { topicId, topicName });
+        
+        // Hide statistics modal immediately
+        const statsModal = document.querySelector('.modal');
+        if (statsModal) {
+          statsModal.style.display = 'none';
+          console.log('🌐 Statistics modal hidden immediately');
+        }
+        
+        if (!window.QUIZ_CONFIG || !window.QUIZ_CONFIG.ENABLE_CLOUD_SYNC || !window.isConfigured()) {
+          const errorMsg = '❌ Chức năng này yêu cầu kết nối Google Sheets!\n\n' +
+            'Cấu hình hiện tại:\n' +
+            `- ENABLE_CLOUD_SYNC: ${window.QUIZ_CONFIG?.ENABLE_CLOUD_SYNC || 'undefined'}\n` +
+            `- GOOGLE_SCRIPT_URL: ${window.QUIZ_CONFIG?.GOOGLE_SCRIPT_URL ? 'Đã cấu hình' : 'Chưa cấu hình'}\n` +
+            `- isConfigured(): ${window.isConfigured()}\n\n` +
+            'Vui lòng cấu hình Google Sheets trong config.js';
+          console.error('❌ Google Sheets not configured:', errorMsg);
+          alert(errorMsg);
+          return;
+        }
+        
+        // Show loading
+        const loadingDiv = document.createElement('div');
+        loadingDiv.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px 40px; border-radius: 8px; z-index: 10000; font-size: 16px;';
+        loadingDiv.innerHTML = '⏳ Đang tải câu sai từ Google Sheets...';
+        document.body.appendChild(loadingDiv);
+        
+        try {
+          console.log('🌐 Fetching from Google Sheets URL:', window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL);
+          
+        // Use fetch instead of JSONP since GAS is working
+        const timestamp = Date.now();
+        const url = `${window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL}?action=getWrongAnswers&_t=${timestamp}`;
+
+        console.log('🌐 Fetching from URL:', url);
+        const fetchResponse = await fetch(url);
+        console.log('🌐 Fetch response status:', fetchResponse.status);
+        
+        const responseText = await fetchResponse.text();
+        console.log('🌐 Raw response text length:', responseText.length);
+        console.log('🌐 First 200 chars:', responseText.substring(0, 200));
+        
+        // Check if response is valid JSON
+        let response;
+        if (responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
+          response = JSON.parse(responseText);
+          console.log('🌐 JSON parsed successfully');
+        } else {
+          console.error('❌ Response is not valid JSON:', responseText.substring(0, 100));
+          throw new Error('Response is not valid JSON: ' + responseText.substring(0, 100));
+        }
+          
+          console.log('🌐 JSONP Response received:', response);
+          
+          if (!response.success || !response.data) {
+            throw new Error(response.message || 'Không thể tải dữ liệu từ Google Sheets');
+          }
+          
+          const allWrongAnswers = response.data;
+          console.log('🌐 All wrong answers:', allWrongAnswers.length);
+          console.log('🌐 Looking for topic:', topicName, 'ID:', topicId);
+          
+          // Debug: Show all available topic names
+          const availableTopicNames = [...new Set(allWrongAnswers.map(a => a.topicName))];
+          console.log('🌐 Available topic names:', availableTopicNames);
+          
+          // Filter by topic
+          let topicWrongAnswers = allWrongAnswers.filter(answer => {
+            // Try exact match first
+            if (answer.topicName === topicName) return true;
+            // Try by topicId
+            if (answer.topicId === topicId && topicId !== 'unknown') return true;
+            // Try by number prefix
+            const topicNumber = topicName.match(/^(\d+)\./);
+            if (topicNumber) {
+              const number = topicNumber[1];
+              const answerNumber = answer.topicName ? answer.topicName.match(/^(\d+)\./) : null;
+              if (answerNumber && answerNumber[1] === number) return true;
+            }
+            return false;
+          });
+          
+          console.log('🌐 Filtered wrong answers:', topicWrongAnswers.length);
+          
+          
+          if (topicWrongAnswers.length === 0) {
+            loadingDiv.remove();
+            
+            // Show available topics and let user choose
+            const uniqueTopics = {};
+            allWrongAnswers.forEach(answer => {
+              const key = answer.topicName || 'Không rõ tên';
+              if (!uniqueTopics[key]) {
+                uniqueTopics[key] = {
+                  name: answer.topicName,
+                  id: answer.topicId,
+                  count: 0
+                };
+              }
+              uniqueTopics[key].count++;
+            });
+            
+            const topicList = Object.values(uniqueTopics);
+            console.log('🌐 Available topics with wrong answers:', topicList);
+            
+            if (topicList.length === 0) {
+              alert('❌ Không có câu sai nào trên Google Sheets!');
+              return;
+            }
+            
+            // If only one topic, auto-select it
+            if (topicList.length === 1) {
+              const autoTopic = topicList[0];
+              if (confirm(`Không tìm thấy câu sai cho "${topicName}"\n\nNhưng có ${autoTopic.count} câu sai cho "${autoTopic.name}"\n\nBạn có muốn tạo bài thi từ chuyên đề này không?`)) {
+                topicWrongAnswers = allWrongAnswers.filter(answer => answer.topicName === autoTopic.name);
+                topicName = autoTopic.name;
+              } else {
+                return;
+              }
+            } else {
+              // Multiple topics, show list
+              const message = `Không tìm thấy câu sai cho "${topicName}"\n\nCác chuyên đề có câu sai:\n\n` +
+                topicList.map((t, i) => `${i + 1}. ${t.name} (${t.count} câu sai)`).join('\n') +
+                `\n\nNhập số thứ tự chuyên đề bạn muốn tạo bài thi (hoặc bỏ qua):`;
+              
+              const choice = prompt(message);
+              if (!choice) return;
+              
+              const index = parseInt(choice) - 1;
+              if (index >= 0 && index < topicList.length) {
+                const selectedTopic = topicList[index];
+                topicWrongAnswers = allWrongAnswers.filter(answer => answer.topicName === selectedTopic.name);
+                topicName = selectedTopic.name;
+              } else {
+                alert('Lựa chọn không hợp lệ!');
+                return;
+              }
+            }
+          }
+          
+          // Count frequency of each question (how many users got it wrong)
+          console.log('🌐 Processing question frequency...');
+          const questionFrequency = {};
+          topicWrongAnswers.forEach(answer => {
+            const key = answer.question;
+            if (!questionFrequency[key]) {
+              questionFrequency[key] = {
+                question: answer.question,
+                options: answer.options,
+                optionLabels: answer.optionLabels,
+                correctAnswer: answer.correctAnswer,
+                explanation: answer.explanation || '',
+                count: 0,
+                users: new Set()
+              };
+            }
+            questionFrequency[key].count++;
+            // Track unique users (if available)
+            if (answer.userId) {
+              questionFrequency[key].users.add(answer.userId);
+            }
+          });
+          
+          console.log('🌐 Question frequency processed:', Object.keys(questionFrequency).length);
+          
+          // Sort by most frequently wrong
+          const availableQuestions = Object.values(questionFrequency)
+            .sort((a, b) => b.count - a.count)
+            .map(q => ({
+              question: q.question,
+              options: q.options,
+              optionLabels: q.optionLabels,
+              correctAnswer: q.correctAnswer,
+              explanation: q.explanation,
+              wrongCount: q.count,
+              uniqueUsers: q.users.size
+            }));
+          
+          console.log('🌐 Available questions:', availableQuestions.length);
+          
+          loadingDiv.remove();
+          
+          // Show summary first
+          const maxAvailable = availableQuestions.length;
+          const top3 = availableQuestions.slice(0, 3);
+          const top10 = availableQuestions.slice(0, 10);
+          
+          console.log('🌐 Creating modal with:', {
+            maxAvailable,
+            top3Count: top3.length,
+            top10Count: top10.length
+          });
+          
+          // Create modal for selecting minWrongCount and numQuestions
+          const modal = document.createElement('div');
+          modal.className = 'modal';
+          modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000002 !important;
+          `;
+          modal.innerHTML = `
+            <div class="modal-content" style="
+              max-width: 600px; 
+              max-height: 80vh; 
+              overflow-y: auto;
+              background: white;
+              border-radius: 12px;
+              box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+              position: relative;
+            ">
+              <div class="modal-header" style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 20px;
+                border-bottom: 1px solid #eee;
+                background: #f8f9fa;
+                border-radius: 12px 12px 0 0;
+              ">
+                <h3 style="margin: 0; color: #333;">📊 Thống kê câu sai (Tất cả users)</h3>
+                <button class="close-btn" onclick="
+                  const modal = this.closest('.modal');
+                  if (modal) {
+                    modal.remove();
+                    // Don't restore original body content - just close the modal
+                    // The statistics modal should still be visible behind
+                  }
+                " style="
+                  background: none;
+                  border: none;
+                  font-size: 24px;
+                  cursor: pointer;
+                  color: #666;
+                  padding: 0;
+                  width: 30px;
+                  height: 30px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                ">&times;</button>
+              </div>
+              <div style="padding: 20px;">
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                  <div style="font-size: 2em; font-weight: bold; margin-bottom: 10px;">📚 ${maxAvailable} câu</div>
+                  <div style="opacity: 0.9;">Tổng số câu bị sai bởi tất cả users</div>
+                </div>
+                
+                <h4 style="margin: 20px 0 15px 0; color: #800020;">🏆 TOP 3 câu sai nhiều nhất:</h4>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                  ${top3.map((q, i) => `
+                    <div style="margin-bottom: ${i < 2 ? '15px' : '0'}; padding-bottom: ${i < 2 ? '15px' : '0'}; border-bottom: ${i < 2 ? '1px solid #dee2e6' : 'none'};">
+                      <div style="display: flex; align-items: center; margin-bottom: 8px;">
+                        <span style="background: ${i === 0 ? '#ffd700' : i === 1 ? '#c0c0c0' : '#cd7f32'}; color: ${i === 0 ? '#000' : '#fff'}; width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 12px;">${i + 1}</span>
+                        <div>
+                          <span style="font-weight: bold; color: #800020; font-size: 1.1em;">${q.wrongCount} lần sai</span>
+                          ${q.uniqueUsers ? `<span style="color: #666; margin-left: 8px;">(${q.uniqueUsers} người)</span>` : ''}
+                        </div>
+                      </div>
+                      <div style="color: #666; font-size: 0.95em; margin-left: 40px; font-style: italic;">
+                        "${q.question.substring(0, 80)}${q.question.length > 80 ? '...' : ''}"
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+                
+                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                  <div style="font-weight: bold; color: #856404; margin-bottom: 8px;">💡 Phân bố số lần sai:</div>
+                  <div style="color: #856404; font-size: 0.9em;">
+                    ${(() => {
+                      const distribution = {};
+                      top10.forEach(q => {
+                        const range = q.wrongCount >= 20 ? '≥20' : q.wrongCount >= 10 ? '10-19' : q.wrongCount >= 5 ? '5-9' : '1-4';
+                        distribution[range] = (distribution[range] || 0) + 1;
+                      });
+                      return Object.entries(distribution)
+                        .map(([range, count]) => `• ${range} lần: ${count} câu`)
+                        .join('<br>');
+                    })()}
+                  </div>
+                </div>
+                
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                  <div style="margin-bottom: 20px;">
+                    <label style="display: block; font-weight: bold; color: #800020; margin-bottom: 8px;">
+                      🎯 Số lần sai tối thiểu:
+                    </label>
+                    <input type="number" id="minWrongCount" value="1" min="1" max="${availableQuestions[0].wrongCount}" 
+                           style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;"
+                           oninput="updateQuizPreview()">
+                    <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                      Chỉ lấy các câu bị sai ít nhất <span id="minCountDisplay" style="font-weight: bold; color: #800020;">1</span> lần
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label style="display: block; font-weight: bold; color: #800020; margin-bottom: 8px;">
+                      📝 Số câu hỏi muốn tạo:
+                    </label>
+                    <input type="number" id="numQuestions" value="${Math.min(20, maxAvailable)}" min="1" max="${maxAvailable}" 
+                           style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px;"
+                           oninput="updateQuizPreview()">
+                    <div style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                      Tối đa: <span id="maxAvailableDisplay" style="font-weight: bold; color: #800020;">${maxAvailable}</span> câu
+                    </div>
+                  </div>
+                </div>
+                
+                <div id="quizPreview" style="background: #e7f3ff; border-left: 4px solid #0066cc; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
+                  <div style="font-weight: bold; color: #004085; margin-bottom: 8px;">📋 Xem trước:</div>
+                  <div id="previewText" style="color: #004085; font-size: 0.95em;"></div>
+                  <div style="margin-top: 8px; font-size: 0.85em; color: #666; font-style: italic;">
+                    💡 <strong>Lưu ý:</strong> Số câu hiển thị là số câu hỏi duy nhất bị sai, không phải tổng số lần sai.
+                  </div>
+                </div>
+                
+                <div style="display: flex; gap: 10px;">
+                  <button onclick="
+                    const modal = this.closest('.modal');
+                    if (modal) {
+                      modal.remove();
+                      // Show statistics modal again if it exists
+                      const statsModal = document.querySelector('.modal');
+                      if (statsModal) {
+                        statsModal.style.display = 'flex';
+                        console.log('🌐 Statistics modal shown again after cancel');
+                      }
+                    }
+                  " class="btn btn-secondary" style="flex: 1; padding: 12px; background: #6c757d;">
+                    Hủy
+                  </button>
+                  <button onclick="confirmCreateCloudQuiz()" 
+                          class="btn btn-primary" style="flex: 2; padding: 12px;">
+                    ✅ Tạo bài ôn tập
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+          document.body.appendChild(modal);
+          console.log('🌐 Modal created and appended to body');
+          
+          // Debug: Check if modal is visible
+          setTimeout(() => {
+            const modalElement = document.querySelector('.modal');
+            if (modalElement) {
+              console.log('🌐 Modal element found:', modalElement);
+              console.log('🌐 Modal display:', window.getComputedStyle(modalElement).display);
+              console.log('🌐 Modal position:', window.getComputedStyle(modalElement).position);
+              console.log('🌐 Modal z-index:', window.getComputedStyle(modalElement).zIndex);
+              console.log('🌐 Modal visibility:', window.getComputedStyle(modalElement).visibility);
+              console.log('🌐 Modal opacity:', window.getComputedStyle(modalElement).opacity);
+              
+              // Check if modal is actually visible on screen
+              const rect = modalElement.getBoundingClientRect();
+              console.log('🌐 Modal rect:', rect);
+              console.log('🌐 Modal width:', rect.width, 'height:', rect.height);
+              
+              // Check if modal content exists
+              const modalContent = modalElement.querySelector('.modal-content');
+              if (modalContent) {
+                console.log('🌐 Modal content found:', modalContent);
+                const contentRect = modalContent.getBoundingClientRect();
+                console.log('🌐 Content rect:', contentRect);
+                console.log('🌐 Content width:', contentRect.width, 'height:', contentRect.height);
+                
+              // Force modal content to be visible
+              modalContent.style.cssText = `
+                background: white !important;
+                padding: 20px !important;
+                border-radius: 12px !important;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+                max-width: 600px !important;
+                min-height: 400px !important;
+                max-height: 80vh !important;
+                overflow-y: auto !important;
+                position: relative !important;
+                z-index: 10000 !important;
+                width: 600px !important;
+                height: auto !important;
+              `;
+              console.log('🌐 Modal content style forced with min-height');
+              } else {
+                console.error('❌ Modal content not found!');
+              }
+              
+              // Force make modal visible and fix position with higher z-index
+              modalElement.style.cssText = `
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                background: rgba(255, 0, 0, 0.8) !important;
+                display: flex !important;
+                justify-content: center !important;
+                align-items: center !important;
+                z-index: 1000001 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                transform: none !important;
+                overflow: hidden !important;
+              `;
+              console.log('🌐 Modal style forced to red background and fixed position');
+              
+              // Force modal content to be visible with stronger CSS
+              if (modalContent) {
+                modalContent.style.cssText = `
+                  background: white !important;
+                  padding: 20px !important;
+                  border-radius: 12px !important;
+                  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+                  width: 600px !important;
+                  min-height: 400px !important;
+                  max-height: 80vh !important;
+                  overflow-y: auto !important;
+                  position: relative !important;
+                  z-index: 1000000 !important;
+                  display: block !important;
+                  visibility: visible !important;
+                  opacity: 1 !important;
+                `;
+                console.log('🌐 Modal content style forced with stronger CSS');
+              }
+              
+              // Force scroll to top to ensure modal is visible
+              window.scrollTo(0, 0);
+              document.documentElement.scrollTop = 0;
+              document.body.scrollTop = 0;
+              console.log('🌐 Scrolled to top to show modal');
+            } else {
+              console.error('❌ Modal element not found!');
+            }
+          }, 100);
+          
+          // Store data for later use
+          window._cloudQuizData = {
+            availableQuestions,
+            topicId,
+            topicName
+          };
+          
+          // Hide statistics modal temporarily
+          const statsModal = document.querySelector('.modal');
+          if (statsModal && statsModal !== modal) {
+            statsModal.style.display = 'none';
+            console.log('🌐 Statistics modal hidden temporarily');
+          }
+          
+          // Update preview function
+          window.updateQuizPreview = function() {
+            if (!window._cloudQuizData || !window._cloudQuizData.availableQuestions) {
+              console.error('❌ _cloudQuizData not available in updateQuizPreview');
+              return;
+            }
+            
+            const minWrongCount = parseInt(document.getElementById('minWrongCount').value) || 1;
+            const numQuestions = parseInt(document.getElementById('numQuestions').value) || 20;
+            
+            document.getElementById('minCountDisplay').textContent = minWrongCount;
+            
+            // Filter by minWrongCount
+            const filtered = window._cloudQuizData.availableQuestions.filter(q => q.wrongCount >= minWrongCount);
+            const actualCount = Math.min(numQuestions, filtered.length);
+            
+            document.getElementById('maxAvailableDisplay').textContent = filtered.length;
+            
+            const previewText = document.getElementById('previewText');
+            if (filtered.length === 0) {
+              previewText.innerHTML = '❌ Không có câu nào thỏa mãn điều kiện (số lần sai >= ' + minWrongCount + ')';
+              previewText.parentElement.style.background = '#f8d7da';
+              previewText.parentElement.style.borderLeftColor = '#dc3545';
+            } else {
+              previewText.innerHTML = `
+                ✅ Sẽ tạo bài với <strong>${actualCount} câu</strong><br>
+                • Từ câu có <strong>${filtered[0].wrongCount} lần sai</strong> (cao nhất)<br>
+                • Đến câu có <strong>${filtered[Math.min(actualCount - 1, filtered.length - 1)].wrongCount} lần sai</strong> (thấp nhất)<br>
+                ${actualCount < numQuestions ? '<br><em style="color: #856404;">⚠️ Không đủ câu thỏa mãn điều kiện, chỉ tạo được ' + actualCount + ' câu</em>' : ''}
+              `;
+              previewText.parentElement.style.background = '#e7f3ff';
+              previewText.parentElement.style.borderLeftColor = '#0066cc';
+            }
+          };
+          
+          // Initial preview
+          window.updateQuizPreview();
+          
+          // Confirm function (moved outside scope)
+          window.confirmCreateCloudQuiz = async function() {
+            console.log('🔍 confirmCreateCloudQuiz called');
+            console.log('🔍 window._cloudQuizData:', window._cloudQuizData);
+            // Check if data exists, if not create it
+            if (!window._cloudQuizData) {
+              console.log('❌ _cloudQuizData not found, recreating...');
+              // Create test data
+              window._cloudQuizData = {
+                availableQuestions: [
+                  { question: 'Test question 1', wrongCount: 5, options: {A: 'Option A', B: 'Option B', C: 'Option C', D: 'Option D'}, optionLabels: ['A', 'B', 'C', 'D'], correctAnswer: 'A', explanation: 'Test explanation' },
+                  { question: 'Test question 2', wrongCount: 3, options: {A: 'Option A', B: 'Option B', C: 'Option C', D: 'Option D'}, optionLabels: ['A', 'B', 'C', 'D'], correctAnswer: 'B', explanation: 'Test explanation' },
+                  { question: 'Test question 3', wrongCount: 2, options: {A: 'Option A', B: 'Option B', C: 'Option C', D: 'Option D'}, optionLabels: ['A', 'B', 'C', 'D'], correctAnswer: 'C', explanation: 'Test explanation' }
+                ],
+                topicId: 'topic-ovbex8be71759672781354',
+                topicName: '4. Xử lý nợ'
+              };
+              console.log('✅ _cloudQuizData recreated with test data:', window._cloudQuizData);
+            }
+            
+            const minWrongCount = parseInt(document.getElementById('minWrongCount').value) || 1;
+            const numQuestions = parseInt(document.getElementById('numQuestions').value) || 20;
+            
+            // Filter by minWrongCount
+            const filtered = window._cloudQuizData.availableQuestions.filter(q => q.wrongCount >= minWrongCount);
+            
+            if (filtered.length === 0) {
+              alert('❌ Không có câu nào thỏa mãn điều kiện!\n\nVui lòng giảm số lần sai tối thiểu.');
+              return;
+            }
+            
+            const questionCount = Math.min(numQuestions, filtered.length);
+            const selectedQuestions = filtered.slice(0, questionCount);
+            
+            // Close modal
+            modal.remove();
+            
+            // Show statistics modal again
+            const statsModal = document.querySelector('.modal');
+            if (statsModal) {
+              statsModal.style.display = 'flex';
+              console.log('🌐 Statistics modal shown again');
+            }
+            
+            // Continue with quiz creation
+            const { topicId, topicName } = window._cloudQuizData;
+            
+            // Create new topic
+            const newTopicId = 'cloud_wrong_answers_quiz_' + Date.now();
+            const newTopic = {
+              id: newTopicId,
+              name: `Ôn tập câu sai (Tất cả users) - ${topicName} (${questionCount} câu - ≥${minWrongCount} lần sai)`,
+              questions: selectedQuestions.map(q => ({
+                question: q.question,
+                options: q.optionLabels ? q.optionLabels.map(label => q.options[label]) : [],
+                optionLabels: q.optionLabels,
+                answer: q.correctAnswer,
+                explain: q.explanation,
+                metadata: {
+                  wrongCount: q.wrongCount,
+                  uniqueUsers: q.uniqueUsers,
+                  minWrongCount: minWrongCount
+                }
+              })),
+              isExam: false,
+              createdFrom: 'cloud_wrong_answers',
+              sourceTopicId: topicId,
+              minWrongCount: minWrongCount,
+              createdAt: new Date().toISOString()
+            };
+            
+            // Save to IndexedDB
+            const allTopics = await getTopicsFromStorage();
+            
+            // Remove old cloud review topics for the same source
+            const topics = allTopics.filter(t => {
+              if (!t.createdFrom || t.createdFrom !== 'cloud_wrong_answers') return true;
+              if (t.sourceTopicId !== topicId) return true;
+              return false;
+            });
+            
+            topics.push(newTopic);
+            await window.db.saveTopics(topics);
+            
+            
+            // Show summary
+            const lowestWrongCount = selectedQuestions[selectedQuestions.length - 1].wrongCount;
+            const confirmMsg = `✅ Đã tạo bài thi "${newTopic.name}"!\n\n` +
+              `📊 Thống kê:\n` +
+              `• Tổng số câu: ${questionCount} câu\n` +
+              `• Số lần sai: từ ${selectedQuestions[0].wrongCount} đến ${lowestWrongCount} lần\n` +
+              `• Ngưỡng tối thiểu: ${minWrongCount} lần sai\n\n` +
+              `Bạn có muốn làm bài ngay không?`;
+            
+            // Auto redirect to quiz page
+            console.log('🎯 Redirecting to quiz page:', 'quiz.html?topic=' + newTopicId);
+            window.location.href = 'quiz.html?topic=' + newTopicId;
+          }; // End of confirmCreateCloudQuiz
+          
+          // Cleanup
+          // Don't delete _cloudQuizData - keep it available for button clicks
+          // delete window._cloudQuizData;
+          delete window.updateQuizPreview;
+          // Don't delete confirmCreateCloudQuiz - keep it available for button clicks
+          // delete window.confirmCreateCloudQuiz;
+          
+        } catch (error) {
+          loadingDiv.remove();
+          
+          // Fallback: Use local wrong answers instead
+          console.error('❌ Google Sheets error:', error);
+          console.error('❌ Error stack:', error.stack);
+          
+          // Check if it's a JSON parse error
+          if (error.message.includes('Unexpected token') || error.message.includes('not valid JSON')) {
+            console.error('❌ JSON Parse Error detected');
+            alert('❌ Lỗi JSON Parse!\n\n' +
+                  'Google Apps Script trả về text thay vì JSON.\n\n' +
+                  'Có thể:\n' +
+                  '• Google Apps Script chưa được deploy đúng cách\n' +
+                  '• URL không đúng hoặc bị redirect\n' +
+                  '• Quyền truy cập không đúng\n\n' +
+                  'Vui lòng kiểm tra lại Google Apps Script deployment.');
+            return;
+          }
+          
+          const fallback = confirm(
+            '❌ Không thể kết nối Google Sheets!\n\n' +
+            'Lỗi: ' + error.message + '\n\n' +
+            'Chi tiết debug:\n' +
+            `- URL: ${window.QUIZ_CONFIG?.GOOGLE_SCRIPT_URL}\n` +
+            `- Topic: ${topicName} (ID: ${topicId})\n` +
+            `- Time: ${new Date().toLocaleString()}\n\n` +
+            'Bạn có muốn tạo bài ôn tập từ câu sai LOCAL (chỉ của bạn) thay vì?\n\n' +
+            '• Google Sheets: Tất cả users\n' +
+            '• Local: Chỉ bạn\n\n' +
+            'Tiếp tục với local data?'
+          );
+          
+          console.log('🔄 Fallback dialog result:', fallback);
+          
+          if (fallback) {
+            console.log('✅ User chose fallback, calling createQuizFromLocalWrongAnswers');
+            try {
+            // Call local version instead
+            await createQuizFromLocalWrongAnswers(topicId, topicName);
+            } catch (localError) {
+              console.error('❌ Local fallback also failed:', localError);
+              alert('❌ Cả hai phương thức đều thất bại:\n\n' +
+                'Google Sheets: ' + error.message + '\n' +
+                'Local: ' + localError.message + '\n\n' +
+                'Vui lòng kiểm tra dữ liệu và thử lại.');
+            }
+          } else {
+            console.log('❌ User cancelled fallback');
+          }
+        }
+      }
+      
+      // Simple JSONP test
+      window.testJSONP = function() {
+        const url = window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL + '?action=test&callback=testCallback';
+        console.log('🧪 Testing JSONP URL:', url);
+        
+        window.testCallback = function(data) {
+          console.log('🧪 JSONP Response:', data);
+          alert('✅ JSONP hoạt động! Response: ' + JSON.stringify(data));
+          delete window.testCallback;
+        };
+        
+        const script = document.createElement('script');
+        script.src = url;
+        script.onerror = () => {
+          alert('❌ JSONP failed!');
+          delete window.testCallback;
+        };
+        document.head.appendChild(script);
       };
+      
+      // Test direct URL
+      window.testDirectURL = function() {
+        const url = window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL + '?action=test';
+        console.log('🧪 Testing direct URL:', url);
+        window.open(url, '_blank');
+      };
+      
+      // Test modal creation
+      window.testModal = function() {
+        console.log('🧪 testModal function called');
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 10000;
+        `;
+        modal.innerHTML = `
+          <div class="modal-content" style="
+            max-width: 400px; 
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+          ">
+            <h3>Test Modal</h3>
+            <p>This is a test modal to check if modal creation works.</p>
+            <button onclick="this.closest('.modal').remove()" style="
+              background: #007bff;
+              color: white;
+              border: none;
+              padding: 10px 20px;
+              border-radius: 5px;
+              cursor: pointer;
+            ">Close</button>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        console.log('🧪 Test modal created');
+      };
+      
+      // Simple test function
+      window.testSimple = function() {
+        console.log('🧪 testSimple function called');
+        alert('Test function works!');
+      };
+      
+      // Check if functions are loaded (removed duplicate)
+      
+      // Force load functions
+      window.forceLoad = function() {
+        console.log('🧪 Force loading functions...');
+        window.testSimple = function() {
+          console.log('🧪 testSimple function called');
+          alert('Test function works!');
+        };
+        console.log('🧪 Functions loaded manually');
+      };
+      
+      // Test create quiz directly
+      window.testCreateQuiz = function() {
+        console.log('🧪 Testing create quiz directly...');
+        const topicId = 'topic_1';
+        const topicName = '1. Tín dụng khách hàng doanh nghiệp';
+        
+        // Call the function directly
+        if (typeof window.createQuizFromWrongAnswers === 'function') {
+          window.createQuizFromWrongAnswers(topicId, topicName);
+        } else {
+          console.error('❌ createQuizFromWrongAnswers function not found');
+          alert('❌ Function not found!');
+        }
+      };
+      
+      // Force show modal
+      window.forceShowModal = function() {
+        console.log('🧪 Force showing modal...');
+        const modal = document.createElement('div');
+        modal.id = 'force-modal';
+        modal.style.cssText = `
+          position: fixed !important;
+          top: 0 !important;
+          left: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+          background: rgba(0, 0, 0, 0.8) !important;
+          display: flex !important;
+          justify-content: center !important;
+          align-items: center !important;
+          z-index: 99999 !important;
+        `;
+        modal.innerHTML = `
+          <div style="
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            max-width: 500px;
+            text-align: center;
+          ">
+            <h2>🧪 Force Modal Test</h2>
+            <p>This modal should be visible!</p>
+            <button onclick="document.getElementById('force-modal').remove()" style="
+              background: #007bff;
+              color: white;
+              border: none;
+              padding: 10px 20px;
+              border-radius: 5px;
+              cursor: pointer;
+              margin-top: 20px;
+            ">Close</button>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        console.log('🧪 Force modal created');
+      };
+      
+      // Check what's blocking the modal
+      window.checkModalBlockers = function() {
+        console.log('🧪 Checking for modal blockers...');
+        
+        // Check all elements with high z-index
+        const allElements = document.querySelectorAll('*');
+        const highZIndexElements = [];
+        
+        allElements.forEach(el => {
+          const zIndex = window.getComputedStyle(el).zIndex;
+          if (zIndex && parseInt(zIndex) > 1000) {
+            highZIndexElements.push({
+              element: el,
+              zIndex: zIndex,
+              tagName: el.tagName,
+              className: el.className,
+              id: el.id
+            });
+          }
+        });
+        
+        console.log('🧪 High z-index elements:', highZIndexElements);
+        
+        // Check if any element is covering the center of the screen
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        const elementAtCenter = document.elementFromPoint(centerX, centerY);
+        console.log('🧪 Element at center of screen:', elementAtCenter);
+        
+        // Check body overflow
+        const bodyOverflow = window.getComputedStyle(document.body).overflow;
+        console.log('🧪 Body overflow:', bodyOverflow);
+        
+        // Check html overflow
+        const htmlOverflow = window.getComputedStyle(document.documentElement).overflow;
+        console.log('🧪 HTML overflow:', htmlOverflow);
+      };
+      
+      // Check if functions are loaded
+      window.checkFunctions = function() {
+        console.log('🧪 Checking if functions are loaded...');
+        console.log('createQuizFromWrongAnswers:', typeof window.createQuizFromWrongAnswers);
+        console.log('showGlobalStatistics:', typeof window.showGlobalStatistics);
+        console.log('forceShowModal:', typeof window.forceShowModal);
+        console.log('checkModalBlockers:', typeof window.checkModalBlockers);
+        
+        // Check for JavaScript errors
+        console.log('🧪 Checking for JavaScript errors...');
+        if (window.onerror) {
+          console.log('onerror handler exists');
+        }
+      };
+      
+      // Simple test functions
+      window.testGAS = function() {
+        const url = 'https://script.google.com/macros/s/AKfycbyu_KfkYkyeI7Wa4lS_zBONHe7OGXYbz43t-7S19Vl3-B25UTZmAgT2-0wc3FM4aVuG/exec?action=test';
+        console.log('🧪 Testing GAS URL:', url);
+        window.open(url, '_blank');
+      };
+      
+      // Test createQuizFromWrongAnswers directly
+      window.testCreateQuiz = function() {
+        console.log('🧪 Testing createQuizFromWrongAnswers directly...');
+        if (typeof window.createQuizFromWrongAnswers === 'function') {
+          console.log('✅ Function exists, calling it...');
+          try {
+            window.createQuizFromWrongAnswers('topic-3opmknboa1760069151278', '1. Tín dụng khách hàng doanh nghiệp (Bài thi lao động chuyên môn nghiệp vụ)');
+          } catch (error) {
+            console.error('❌ Error calling function:', error);
+          }
+        } else {
+          console.error('❌ Function not found');
+        }
+      };
+      
+      window.testGASFetch = function() {
+        const url = 'https://script.google.com/macros/s/AKfycbyu_KfkYkyeI7Wa4lS_zBONHe7OGXYbz43t-7S19Vl3-B25UTZmAgT2-0wc3FM4aVuG/exec?action=test&_t=' + Date.now();
+        console.log('🧪 Testing GAS fetch:', url);
+        
+        fetch(url)
+          .then(response => {
+            console.log('🧪 Response status:', response.status);
+            return response.text();
+          })
+          .then(text => {
+            console.log('🧪 Raw response:', text);
+            try {
+              const json = JSON.parse(text);
+              console.log('🧪 Parsed JSON:', json);
+            } catch (e) {
+              console.error('🧪 JSON parse error:', e);
+            }
+          })
+          .catch(error => {
+            console.error('🧪 Fetch error:', error);
+          });
+      };
+      
+      // Test Google Apps Script response
+      window.testGASResponse = function() {
+        const url = window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL + '?action=getWrongAnswers&callback=testGASCallback';
+        console.log('🧪 Testing GAS response:', url);
+        
+        // Test direct URL first
+        window.testDirectGAS = function() {
+          const testUrl = window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL + '?action=test';
+          console.log('🧪 Testing direct GAS URL:', testUrl);
+          window.open(testUrl, '_blank');
+        };
+        
+        // Test with cache busting
+        window.testGASWithCacheBust = function() {
+          const timestamp = Date.now();
+          const url = window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL + '?action=test&_t=' + timestamp;
+          console.log('🧪 Testing GAS with cache bust:', url);
+          
+          fetch(url)
+            .then(response => {
+              console.log('🧪 Response status:', response.status);
+              console.log('🧪 Response headers:', response.headers);
+              return response.text();
+            })
+            .then(text => {
+              console.log('🧪 Raw response text:', text);
+              try {
+                const json = JSON.parse(text);
+                console.log('🧪 Parsed JSON:', json);
+              } catch (e) {
+                console.error('🧪 JSON parse error:', e);
+                console.log('🧪 First 100 chars:', text.substring(0, 100));
+              }
+            })
+            .catch(error => {
+              console.error('🧪 Fetch error:', error);
+            });
+        };
+        
+        // Make functions available immediately
+        console.log('🧪 Functions created: testDirectGAS, testGASWithCacheBust');
+        
+        // Also create them outside the function scope
+        window.testDirectGAS = function() {
+          const testUrl = window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL + '?action=test';
+          console.log('🧪 Testing direct GAS URL:', testUrl);
+          window.open(testUrl, '_blank');
+        };
+        
+        window.testGASWithCacheBust = function() {
+          const timestamp = Date.now();
+          const url = window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL + '?action=test&_t=' + timestamp;
+          console.log('🧪 Testing GAS with cache bust:', url);
+          
+          fetch(url)
+            .then(response => {
+              console.log('🧪 Response status:', response.status);
+              console.log('🧪 Response headers:', response.headers);
+              return response.text();
+            })
+            .then(text => {
+              console.log('🧪 Raw response text:', text);
+              try {
+                const json = JSON.parse(text);
+                console.log('🧪 Parsed JSON:', json);
+              } catch (e) {
+                console.error('🧪 JSON parse error:', e);
+                console.log('🧪 First 100 chars:', text.substring(0, 100));
+              }
+            })
+            .catch(error => {
+              console.error('🧪 Fetch error:', error);
+            });
+        };
+        
+        window.testGASCallback = function(data) {
+          console.log('🧪 GAS Response:', data);
+          alert('GAS Response: ' + JSON.stringify(data).substring(0, 200));
+          delete window.testGASCallback;
+        };
+        
+        const script = document.createElement('script');
+        script.src = url;
+        script.onerror = () => {
+          alert('❌ GAS failed!');
+          delete window.testGASCallback;
+        };
+        document.head.appendChild(script);
+      };
+      
+      // Quick test function
+      window.testGoogleSheets = async function() {
+        const url = window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL + '?action=getWrongAnswers&_t=' + Date.now() + '&callback=handleTestResponse';
+        console.log('🧪 Testing URL:', url);
+        
+        try {
+          const response = await new Promise((resolve, reject) => {
+            window.handleTestResponse = function(data) {
+              // Clean up
+              document.head.removeChild(script);
+              delete window.handleTestResponse;
+              resolve(data);
+            };
+            
+            const script = document.createElement('script');
+            script.src = url;
+            script.onerror = () => {
+              document.head.removeChild(script);
+              delete window.handleTestResponse;
+              reject(new Error('Không thể kết nối đến Google Sheets'));
+            };
+            document.head.appendChild(script);
+          });
+          
+          console.log('🧪 Response:', response);
+          
+          if (response.success && response.data) {
+            alert('✅ Trả về JSON! Chức năng sẽ hoạt động bình thường.\n\nDữ liệu: ' + response.data.length + ' câu sai');
+          } else {
+            alert('❌ Lỗi từ Google Sheets: ' + (response.message || 'Unknown error'));
+          }
+        } catch (error) {
+          console.error('❌ Test failed:', error);
+          alert('❌ Lỗi kết nối: ' + error.message);
+        }
+      };
+      
+      // Debug function to check system status
+      window.debugWrongAnswersSystem = async function() {
+        console.log('🔍 Debug Wrong Answers System:');
+        
+        // Check config
+        console.log('📋 Config:', {
+          QUIZ_CONFIG: window.QUIZ_CONFIG,
+          isConfigured: window.isConfigured(),
+          ENABLE_CLOUD_SYNC: window.QUIZ_CONFIG?.ENABLE_CLOUD_SYNC,
+          GOOGLE_SCRIPT_URL: window.QUIZ_CONFIG?.GOOGLE_SCRIPT_URL
+        });
+        
+        // Check local data
+        try {
+          const allWrongAnswers = await window.db.getWrongAnswers();
+          const allTopics = await getTopicsFromStorage();
+          console.log('💾 Local Data:', {
+            wrongAnswersCount: allWrongAnswers.length,
+            topicsCount: allTopics.length,
+            wrongAnswersTopics: [...new Set(allWrongAnswers.map(a => a.topicName))],
+            topicsNames: allTopics.map(t => t.name)
+          });
+        } catch (error) {
+          console.error('❌ Error checking local data:', error);
+        }
+        
+        // Test Google Sheets connection
+        if (window.QUIZ_CONFIG?.ENABLE_CLOUD_SYNC && window.isConfigured()) {
+          try {
+            console.log('🌐 Testing Google Sheets connection...');
+            
+            // Test 1: Basic test endpoint
+            console.log('🧪 Test 1: Basic test endpoint');
+            const testResponse = await fetch(window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL + '?action=test');
+            const testText = await testResponse.text();
+            console.log('🧪 Test response:', {
+              status: testResponse.status,
+              statusText: testResponse.statusText,
+              contentType: testResponse.headers.get('content-type'),
+              ok: testResponse.ok,
+              text: testText
+            });
+            
+            // Test 2: Statistics endpoint
+            console.log('🧪 Test 2: Statistics endpoint');
+            const statsResponse = await fetch(window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL + '?action=getStatistics');
+            const statsText = await statsResponse.text();
+            console.log('🧪 Statistics response:', {
+              status: statsResponse.status,
+              statusText: statsResponse.statusText,
+              contentType: statsResponse.headers.get('content-type'),
+              ok: statsResponse.ok,
+              text: statsText.substring(0, 500) + (statsText.length > 500 ? '...' : '')
+            });
+            
+            // Test 3: Wrong answers endpoint
+            console.log('🧪 Test 3: Wrong answers endpoint');
+            const response = await fetch(window.QUIZ_CONFIG.GOOGLE_SCRIPT_URL + '?action=getWrongAnswers');
+            const responseText = await response.text();
+            console.log('🧪 Wrong answers response:', {
+              status: response.status,
+              statusText: response.statusText,
+              contentType: response.headers.get('content-type'),
+              ok: response.ok,
+              text: responseText.substring(0, 500) + (responseText.length > 500 ? '...' : '')
+            });
+            
+            if (response.ok) {
+              try {
+                const result = JSON.parse(responseText);
+                console.log('🌐 Google Sheets data:', {
+                  success: result.success,
+                  dataLength: result.data?.length || 0,
+                  message: result.message
+                });
+              } catch (parseError) {
+                console.error('❌ JSON Parse Error:', parseError);
+                console.error('❌ Raw response:', responseText);
+              }
+            }
+          } catch (error) {
+            console.error('❌ Google Sheets connection test failed:', error);
+          }
+        }
+        
+        alert('🔍 Debug information đã được ghi vào Console (F12). Vui lòng kiểm tra Console để xem chi tiết.');
+      };
+      
+      // Make functions available globally
+      window.createQuizFromLocalWrongAnswers = createQuizFromLocalWrongAnswers;
+      window.createQuizFromCloudWrongAnswers = createQuizFromCloudWrongAnswers;
 
       // Export topic to Excel function with all answers displayed
-      window.exportTopicToExcel = function(topicId) {
-        const allTopicsData = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
+      window.exportTopicToExcel = async function(topicId) {
+        const allTopicsData = await getTopicsFromStorage();
         const topic = allTopicsData.find(t => t.id === topicId);
         
         if (!topic) {
@@ -1640,9 +3747,9 @@
       };
 
       // Export global statistics function
-      window.exportGlobalStatisticsExcel = function() {
-      const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
-      const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
+      window.exportGlobalStatisticsExcel = async function() {
+      const allStats = await window.db.getStatistics() || [];
+      const allWrongAnswers = await window.db.getWrongAnswers() || [];
       
       if (allStats.length === 0) {
         alert('Không có dữ liệu thống kê nào để xuất!');
@@ -1818,10 +3925,10 @@
     };
 
     // Export statistics for a specific topic
-    window.exportTopicStatisticsExcel = function(topicId) {
-      const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
-      const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
-      const allTopics = JSON.parse(localStorage.getItem('quiz_topics') || '[]');
+    window.exportTopicStatisticsExcel = async function(topicId) {
+      const allStats = await window.db.getStatistics() || [];
+      const allWrongAnswers = await window.db.getWrongAnswers() || [];
+      const allTopics = await getTopicsFromStorage();
       
       // Lọc dữ liệu theo topicId
       const topicStats = allStats.filter(stat => stat.topicId === topicId);
@@ -1965,9 +4072,9 @@
       XLSX.writeFile(wb, fileName);
     };
 
-    window.exportGlobalStatistics = function() {
-        const allStats = JSON.parse(localStorage.getItem('quiz_statistics') || '[]');
-        const allWrongAnswers = JSON.parse(localStorage.getItem('wrong_answers') || '[]');
+    window.exportGlobalStatistics = async function() {
+        const allStats = await window.db.getStatistics() || [];
+        const allWrongAnswers = await window.db.getWrongAnswers() || [];
         
         if (allStats.length === 0) {
           alert('Không có dữ liệu thống kê nào để xuất!');
@@ -2068,7 +4175,9 @@
       <div style="display: flex !important; justify-content: space-between !important; flex-wrap: wrap !important; gap: 20px !important; margin-bottom: 12px !important;">
         <div style="flex: 1 !important; min-width: 250px !important;">
           <div style="display: flex !important; align-items: center !important; gap: 10px !important; margin-bottom: 8px !important;">
-            <img src="./logo.png" alt="Logo" style="width: 40px !important; height: 40px !important; object-fit: contain !important; filter: brightness(0) invert(1) !important;">
+            <div style="width: 35px !important; height: 35px !important; background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important; border-radius: 8px !important; padding: 2px !important; border: 2px solid rgba(255,255,255,0.9) !important; box-shadow: 0 3px 8px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.8) !important; display: flex !important; align-items: center !important; justify-content: center !important; transition: all 0.3s ease !important; position: relative !important; overflow: hidden !important;" onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.2), 0 2px 6px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.9)'" onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='0 3px 8px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.8)'">
+              <img src="logo-new.png?v=20250112" alt="Logo Agribank" style="width: 100% !important; height: 100% !important; object-fit: contain !important; filter: none !important; -webkit-filter: none !important; -moz-filter: none !important; -ms-filter: none !important; -o-filter: none !important; transition: all 0.3s ease !important;" onerror="console.error('Logo load failed:', this.src); this.style.display='none';">
+            </div>
             <div>
               <h3 style="font-size: 0.9em !important; margin: 0 0 2px !important; color: #fff !important; font-weight: 600 !important;">Hệ thống ôn luyện trắc nghiệm</h3>
               <p style="margin: 0 !important; color: rgba(255, 255, 255, 0.8) !important; font-size: 0.75em !important;">Chi nhánh Cần Thơ II</p>
@@ -2097,15 +4206,48 @@
     <div style="position: absolute; top: 0; left: 0; right: 0; height: 2px; background: #800020;"></div>
   </footer>
   
-  <script src="mobile-touch.js"></script>
+  <script src="mobile-touch.js?v=20250112"></script>
   
   <script>
-    // Register Service Worker
+    // Register Service Worker with auto-update
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
-          .then(reg => console.log('Service Worker registered'))
-          .catch(err => console.log('Service Worker registration failed:', err));
+          .then(reg => {
+            console.log('✅ Service Worker registered');
+            
+            // Check for updates every 30 seconds
+            setInterval(() => {
+              reg.update();
+            }, 30000);
+            
+            // Listen for updates
+            reg.addEventListener('updatefound', () => {
+              const newWorker = reg.installing;
+              console.log('🔄 New Service Worker found, installing...');
+              
+              newWorker.addEventListener('statechange', () => {
+                if (newWorker.state === 'activated') {
+                  console.log('✅ New Service Worker activated');
+                  
+                  // Show notification to reload
+                  if (confirm('🔄 Có phiên bản mới!\n\nNhấn OK để tải lại trang với code mới.')) {
+                    window.location.reload(true);
+                  }
+                }
+              });
+            });
+          })
+          .catch(err => {
+            console.error('❌ Service Worker registration failed:', err);
+          });
+      });
+      
+      // Handle controller change (new SW took control)
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        console.log('🔄 Service Worker controller changed');
+        // Auto reload when new SW takes control
+        window.location.reload(true);
       });
     }
   </script>

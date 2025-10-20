@@ -169,6 +169,59 @@ input, textarea, select {
     tap-highlight-color: transparent;
   }
 
+  /* Mobile checkbox styling - prevent checkbox from looking like textbox */
+  input[type="checkbox"] {
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+    width: 22px !important;
+    height: 22px !important;
+    min-width: 22px !important;
+    min-height: 22px !important;
+    max-width: 22px !important;
+    max-height: 22px !important;
+    padding: 0 !important;
+    margin: 0 4px 0 0 !important;
+    border: 2px solid #800020 !important;
+    border-radius: 6px !important;
+    background: white !important;
+    cursor: pointer !important;
+    position: relative !important;
+    flex-shrink: 0 !important;
+    transition: all 0.2s ease !important;
+    vertical-align: middle !important;
+  }
+
+  input[type="checkbox"]:checked {
+    background: #800020 !important;
+    border-color: #800020 !important;
+  }
+
+  input[type="checkbox"]:checked::after {
+    content: '✓' !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    color: white !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    line-height: 1 !important;
+  }
+
+  input[type="checkbox"]:focus {
+    outline: 2px solid rgba(128,0,32,0.3) !important;
+    outline-offset: 2px !important;
+  }
+
+  /* Ensure checkbox labels work properly */
+  label:has(input[type="checkbox"]) {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    cursor: pointer !important;
+  }
+
   input:focus,
   select:focus,
   textarea:focus {
