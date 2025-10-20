@@ -221,7 +221,7 @@ function parseExcelFile(file, callback) {
       }
       
       const questions = rows.map((row, idx) => {
-        let rawAnswer = getCol(row, 'đáp án đúng').toString().trim();
+        let rawAnswer = getCol(row, 'đáp án đúng').toString();
         let cols = [
           {label: "A", value: getCol(row, 'đáp án a')},
           {label: "B", value: getCol(row, 'đáp án b')},
@@ -245,7 +245,7 @@ function parseExcelFile(file, callback) {
         const labelsArray = (optionLabels || []).slice(); // e.g., ["A","B","C","D"] but only for non-empty options
         const toLabel = (token) => {
           if (!token) return null;
-          const t = String(token).trim();
+          const t = String(token).replace(/[\u00A0\s]+/g, '').trim();
           if (!t) return null;
           const parts = t.split('/').map(p => p.trim()).filter(Boolean);
           let letter = null;
@@ -264,7 +264,11 @@ function parseExcelFile(file, callback) {
           return null;
         };
 
-        const tokens = rawAnswer.split(',').map(s => s.trim()).filter(Boolean);
+        // Accept separators: comma, full-width comma, ideographic comma, semicolon; also allow descriptions before ';'
+        let s = rawAnswer || '';
+        if (s.includes(';')) s = s.substring(s.lastIndexOf(';') + 1);
+        const seps = /[\,\uFF0C；;、]/g;
+        const tokens = s.split(seps).map(x => x.trim()).filter(Boolean);
         const mapped = Array.from(new Set(tokens.map(toLabel).filter(Boolean)));
         if (mapped.length === 0) return null; // no valid answers parsed
 

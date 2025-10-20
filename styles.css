@@ -181,11 +181,10 @@ textarea:focus {
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
-  align-items: flex-start;
-  gap: 0px !important;      /* Giảm khoảng cách giữa ký tự và nội dung đáp án */
+  align-items: center;
+  gap: 6px !important;      /* Khoảng cách nhỏ giữa checkbox/radio và nhãn A,B,C,D */
   padding: 10px 14px !important;
   padding-left: 2px !important; /* giảm sát lề trái */
-
 }
 
 .answer:hover {
@@ -200,7 +199,7 @@ textarea:focus {
 
 .answer .option {
   min-width: 24px !important;   /* nhỏ lại cho sát hơn */
-  margin-right: 0px !important; /* giữ khoảng cách với nội dung đáp án */
+  margin-right: 6px !important; /* khoảng cách nhẹ giữa ký tự và nội dung đáp án */
   margin-left: 0 !important;
   font-size: 1.15em !important;
   font-weight: 600 !important;
@@ -208,6 +207,13 @@ textarea:focus {
   display: flex !important;
   align-items: center !important;
   justify-content: flex-start !important;
+}
+
+.answer-input {
+  width: 18px;
+  height: 18px;
+  margin: 0 4px 0 0 !important; /* sát với chữ A/B/C/D */
+  flex: 0 0 auto;
 }
 
 .answer .text {
