@@ -1718,7 +1718,14 @@ async function continueInitQuiz() {
       updateNavigation();
       updateProgress();
 // ... cuối showQuestion(index):
-scrollToQuestion();
+if (window.forceFocusButtonOnce) {
+  // Bỏ qua focus về câu hỏi cho lần render này
+  window.forceFocusButtonOnce = false;
+} else if (window.suppressFocusUntilMs && Date.now() < window.suppressFocusUntilMs) {
+  // Bỏ qua focus về câu hỏi nếu đang trong khoảng thời gian suppress sau khi chọn đáp án
+} else {
+  scrollToQuestion();
+}
 updateNextBtnStatus();
 
 
@@ -1867,9 +1874,16 @@ updateNextBtnStatus();
         showExplanation(question.explain);
         userAnswer.explanationShown = true;
       }
+      // Tránh focus quay lại câu hỏi trong một khoảng ngắn sau khi cập nhật lựa chọn
+      window.suppressFocusUntilMs = Date.now() + 1200;
+      // Ép bỏ qua focus câu hỏi cho lần render kế tiếp và chuyển focus sang nút điều hướng
+      window.forceFocusButtonOnce = true;
       showQuestion(currentQuestionIndex);
       saveProgress();
       updateNextBtnStatus();
+      // Sau khi chọn đáp án, focus sang nút Câu tiếp hoặc Nộp bài nếu là câu cuối
+      // Delay để đảm bảo DOM đã cập nhật xong
+      setTimeout(() => focusNextOrSubmit(), 100);
     }
 
     // Multi-answer handler (checkboxes)
@@ -1886,9 +1900,23 @@ updateNextBtnStatus();
         showExplanation(question.explain);
         userAnswer.explanationShown = true;
       }
+      // Tránh focus quay lại câu hỏi trong một khoảng ngắn sau khi cập nhật lựa chọn
+      window.suppressFocusUntilMs = Date.now() + 400;
+      // Ép bỏ qua focus câu hỏi cho lần render này
+      window.forceFocusButtonOnce = true;
       showQuestion(currentQuestionIndex);
       saveProgress();
       updateNextBtnStatus();
+      // Chỉ focus khi số lượng lựa chọn đã chọn bằng với số đáp án cần chọn của câu hỏi
+      try {
+        const neededCount = Array.isArray(correctLabels) ? correctLabels.length : 0;
+        const selectedCount = Array.isArray(userAnswer.answer) ? userAnswer.answer.length : 0;
+        const isMultiChoice = neededCount > 1; 
+        if (isMultiChoice && selectedCount === neededCount && selectedCount > 0) {
+          // Delay để đảm bảo DOM đã cập nhật xong
+          setTimeout(() => focusNextOrSubmit(), 100);
+        }
+      } catch(_) {}
     }
 
     function toggleFlag() {
@@ -2120,6 +2148,61 @@ function updateNextBtnStatus(){
   const st = getAnswerStatus(currentQuestionIndex);
   const base = `Câu tiếp <i class="material-icons">navigate_next</i>`;
   el.innerHTML = `${base} <span class="status-badge ${st.cls}">${st.text}</span>`;
+}
+
+function focusNextOrSubmit(){
+  try {
+    const byId = id => document.getElementById(id);
+    const isHidden = el => !el || el.offsetParent === null || getComputedStyle(el).display === 'none';
+    const isDisabled = el => !el || el.disabled === true;
+    const isLast = (typeof questions !== 'undefined' && Array.isArray(questions))
+      ? currentQuestionIndex === questions.length - 1
+      : false;
+
+    // Always resolve fresh elements from DOM
+    let nextEl = byId('next-btn');
+    let submitEl = byId('submit-quiz-btn');
+
+    console.log('focusNextOrSubmit called:', { isLast, nextEl, submitEl, nextHidden: isHidden(nextEl), nextDisabled: isDisabled(nextEl) });
+
+    // Decide preferred target
+    let target = null;
+    if (isLast || isHidden(nextEl) || isDisabled(nextEl)) {
+      target = submitEl;
+    } else {
+      target = nextEl;
+    }
+    
+    console.log('Focus target:', target);
+    if (!target) {
+      console.warn('No focus target found!');
+      return;
+    }
+
+    const doFocus = () => {
+      if (typeof target.focus === 'function') {
+        console.log('Focusing:', target.id || target);
+        try { 
+          // Cuộn nút vào tầm nhìn trước
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Sau đó focus (không cuộn thêm)
+          setTimeout(() => {
+            target.focus({ preventScroll: true }); 
+            console.log('Focus successful, activeElement:', document.activeElement);
+          }, 200);
+        } catch (_) { 
+          target.focus(); 
+          console.log('Focus fallback, activeElement:', document.activeElement);
+        }
+      }
+    };
+
+    // Execute focus immediately and with fallback
+    doFocus();
+    setTimeout(doFocus, 50);
+  } catch (e) {
+    console.error('focusNextOrSubmit error:', e);
+  }
 }
 
     function showResults() {
@@ -2532,6 +2615,8 @@ function updateNextBtnStatus(){
       prevBtn.addEventListener('click', async () => {
         if (isPaused) return;
         if (currentQuestionIndex > 0) {
+          window.suppressFocusUntilMs = 0;
+          window.forceFocusButtonOnce = false;
           showQuestion(currentQuestionIndex - 1);
           await saveProgress();
           updateNextBtnStatus();
@@ -2541,6 +2626,8 @@ function updateNextBtnStatus(){
       nextBtn.addEventListener('click', async () => {
         if (isPaused) return;
         if (currentQuestionIndex < questions.length - 1) {
+          window.suppressFocusUntilMs = 0;
+          window.forceFocusButtonOnce = false;
           showQuestion(currentQuestionIndex + 1);
           await saveProgress();
           updateNextBtnStatus();
@@ -2613,8 +2700,12 @@ function updateNextBtnStatus(){
       document.addEventListener('keydown', (e) => {
         if (isPaused) return;
         if (e.key === 'ArrowLeft' && currentQuestionIndex > 0) {
+          window.suppressFocusUntilMs = 0;
+          window.forceFocusButtonOnce = false;
           showQuestion(currentQuestionIndex - 1);
         } else if (e.key === 'ArrowRight' && currentQuestionIndex < questions.length - 1) {
+          window.suppressFocusUntilMs = 0;
+          window.forceFocusButtonOnce = false;
           showQuestion(currentQuestionIndex + 1);
         } else if (e.key === ' ' || e.key === 'Enter') {
           if (!e.target.matches('button, a, input, textarea')) {

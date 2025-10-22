@@ -34,7 +34,11 @@ const CONFIG = {
   // Thông tin hiển thị
   APP_NAME: 'Hệ thống ôn luyện trắc nghiệm Cần Thơ II',
   CONTACT_EMAIL: 'trungnguyenthanh1@agribank.com.vn',
-  CONTACT_PHONE: '0947.86.86.82'
+  CONTACT_PHONE: '0947.86.86.82',
+  
+  // ⚠️ QUAN TRỌNG: Tăng số này MỖI KHI thay đổi topics.json để buộc tải dữ liệu mới
+  // Ví dụ: Thêm câu hỏi mới, sửa đề thi → tăng từ 1 lên 2, 3, 4...
+  DATA_VERSION: 1
 };
 
 // Kiểm tra cấu hình

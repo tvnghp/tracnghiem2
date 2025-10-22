@@ -1890,30 +1890,60 @@
             }
           }
           
-          // Try to load from IndexedDB first
+          // Kiểm tra phiên bản dữ liệu để buộc tải lại khi có thay đổi
+          let shouldForceReload = false;
           try {
-            if (window.db) {
-              // Try to get from quiz_topics store first
-              const localTopics = await window.db.getTopics();
-              if (localTopics && localTopics.length > 0) {
-                hideLoadingState();
-                await renderLists(localTopics);
-                return;
+            const storedVersion = await window.db.getConfig('data_version');
+            const currentVersion = window.QUIZ_CONFIG?.DATA_VERSION || 1;
+            
+            if (storedVersion) {
+              const storedVer = parseInt(storedVersion);
+              if (storedVer < currentVersion) {
+                console.log(`⚠️ Phát hiện phiên bản dữ liệu mới: ${storedVer} → ${currentVersion}. Buộc tải lại...`);
+                shouldForceReload = true;
+                // Xóa cache cũ
+                await window.db.deleteConfig('quiz_topics');
+                await window.db.clearTopics();
+                console.log('✅ Đã xóa cache cũ');
               }
-              
-              // Fallback to config store for backward compatibility
-              const localTopicsStr = await window.db.getConfig('quiz_topics');
-              if (localTopicsStr) {
-                const localTopics = JSON.parse(localTopicsStr);
-                if (Array.isArray(localTopics) && localTopics.length > 0) {
+            } else {
+              // Lần đầu tiên hoặc chưa có version
+              shouldForceReload = true;
+            }
+          } catch (e) {
+            console.error('Error checking data version:', e);
+          }
+          
+          // Try to load from IndexedDB first (nếu không bắt buộc reload)
+          if (!shouldForceReload) {
+            try {
+              if (window.db) {
+                // Try to get from quiz_topics store first
+                const localTopics = await window.db.getTopics();
+                if (localTopics && localTopics.length > 0) {
+                  console.log('✅ Sử dụng dữ liệu từ cache (IndexedDB)');
                   hideLoadingState();
                   await renderLists(localTopics);
                   return;
                 }
+                
+                // Fallback to config store for backward compatibility
+                const localTopicsStr = await window.db.getConfig('quiz_topics');
+                if (localTopicsStr) {
+                  const localTopics = JSON.parse(localTopicsStr);
+                  if (Array.isArray(localTopics) && localTopics.length > 0) {
+                    console.log('✅ Sử dụng dữ liệu từ cache (config store)');
+                    hideLoadingState();
+                    await renderLists(localTopics);
+                    return;
+                  }
+                }
               }
+            } catch (e) {
+              console.error('Error loading from IndexedDB:', e);
             }
-          } catch (e) {
-            console.error('Error loading from IndexedDB:', e);
+          } else {
+            console.log('🔄 Bỏ qua cache, tải dữ liệu mới từ server...');
           }
           
           // Try to load from remote with multiple fallback strategies
@@ -1954,6 +1984,10 @@
                     try {
                       if (window.db) {
                         await window.db.setConfig('quiz_topics', JSON.stringify(validTopics));
+                        // Lưu phiên bản hiện tại
+                        const currentVersion = window.QUIZ_CONFIG?.DATA_VERSION || 1;
+                        await window.db.setConfig('data_version', currentVersion.toString());
+                        console.log(`✅ Đã lưu dữ liệu mới với phiên bản ${currentVersion}`);
                       }
                     } catch (e) {
                       console.error('Error saving to IndexedDB:', e);

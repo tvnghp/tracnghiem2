@@ -211,6 +211,10 @@ class IndexedDBStorage {
     return await this.delete('quiz_topics', topicId);
   }
 
+  async clearTopics() {
+    return await this.clear('quiz_topics');
+  }
+
   // === PROGRESS METHODS ===
 
   async saveProgress(topicId, progressData) {

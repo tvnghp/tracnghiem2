@@ -128,16 +128,54 @@ async function checkAndInitializeData() {
   console.log('🔍 Checking and initializing data...');
   
   try {
+    // Kiểm tra phiên bản dữ liệu để buộc tải lại khi có thay đổi
+    let shouldForceReload = false;
+    try {
+      const storedVersion = await window.db.getConfig('data_version');
+      const currentVersion = window.QUIZ_CONFIG?.DATA_VERSION || 1;
+      
+      if (storedVersion) {
+        const storedVer = parseInt(storedVersion);
+        if (storedVer < currentVersion) {
+          console.log(`⚠️ Phát hiện phiên bản dữ liệu mới: ${storedVer} → ${currentVersion}. Buộc tải lại...`);
+          shouldForceReload = true;
+          // Xóa cache cũ
+          await window.db.deleteConfig('quiz_topics');
+          await window.db.clearTopics();
+          console.log('✅ Đã xóa cache cũ');
+        }
+      } else {
+        // Lần đầu tiên hoặc chưa có version
+        shouldForceReload = true;
+      }
+    } catch (e) {
+      console.error('Error checking data version:', e);
+    }
+    
     // Check if we have any topics in IndexedDB
     const topics = await getTopics();
     console.log('📊 Current topics in IndexedDB:', topics.length);
     
-    if (topics.length === 0) {
-      console.log('⚠️ No topics found, trying to load from topics.json...');
+    if (topics.length === 0 || shouldForceReload) {
+      if (shouldForceReload) {
+        console.log('🔄 Bỏ qua cache, tải dữ liệu mới từ server...');
+      } else {
+        console.log('⚠️ No topics found, trying to load from topics.json...');
+      }
       
       // Try to load from topics.json file
       try {
-        const response = await fetch('./topics.json');
+        // Add cache busting
+        const url = new URL('./topics.json', location.href);
+        url.searchParams.set('v', Date.now());
+        
+        const response = await fetch(url, { 
+          cache: 'no-store',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        
         if (response.ok) {
           const topicsData = await response.json();
           console.log('✅ Loaded topics from topics.json:', topicsData.length);
@@ -147,10 +185,15 @@ async function checkAndInitializeData() {
             await saveTopics(topicsData);
             console.log('✅ Saved topics to IndexedDB');
             
+            // Lưu phiên bản hiện tại
+            const currentVersion = window.QUIZ_CONFIG?.DATA_VERSION || 1;
+            await window.db.setConfig('data_version', currentVersion.toString());
+            console.log(`✅ Đã lưu dữ liệu mới với phiên bản ${currentVersion}`);
+            
             // Show success message
             const msgEl = document.getElementById('topic-msg');
             if (msgEl) {
-              msgEl.textContent = `Đã tải ${topicsData.length} chuyên đề từ topics.json`;
+              msgEl.textContent = `Đã tải ${topicsData.length} chuyên đề từ topics.json (v${currentVersion})`;
               msgEl.className = 'ml-2 success';
               setTimeout(() => {
                 msgEl.textContent = '';
